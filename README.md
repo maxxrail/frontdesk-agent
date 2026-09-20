@@ -8,8 +8,8 @@ from a waitlist, and routes anything risky to a human for approval.
 Every model call is logged with tokens, cost and latency. Every prompt change is
 gated by an eval suite in CI.
 
-**Status:** Module 0 of 9 complete. The service is a skeleton with health
-endpoints; the agent arrives in Module 4.
+**Status:** Module 1 of 9 complete. The service drafts reminder messages
+through a validated LLM call; the agent arrives in Module 4.
 
 All data in this repo is synthetic. No real patient or customer data is used.
 
@@ -35,6 +35,21 @@ curl http://localhost:8000/healthz
 # {"status":"ok","service":"frontdesk-agent","version":"0.0.0","env":"local"}
 ```
 
+Draft a reminder (needs `FDA_ANTHROPIC_API_KEY` in `.env`):
+
+```bash
+curl -X POST http://localhost:8000/v1/drafts/reminder \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "business_name": "Maple Dental",
+    "business_type": "dental office",
+    "client_first_name": "Dana",
+    "appointment_at": "2026-10-06T14:30:00",
+    "provider_name": "Dr. Osei",
+    "location": "120 Main St"
+  }'
+```
+
 Interactive API docs: <http://localhost:8000/docs>
 
 ## Development
@@ -54,20 +69,29 @@ every pull request.
 
 ```
 src/frontdesk_agent/
-  main.py          app factory and entrypoint
-  config.py        settings from environment variables
-  api/health.py    /healthz and /readyz
-tests/             pytest suite
-docs/adr/          architecture decision records
-.github/workflows/ CI
+  main.py            app factory and entrypoint
+  config.py          settings from environment variables
+  dependencies.py    wiring: which LLM client the app uses
+  prompts.py         loads and renders versioned prompt files
+  api/health.py      /healthz and /readyz
+  api/drafts.py      /v1/drafts/reminder
+  llm/base.py        LLMClient protocol, errors, LLMCompletion
+  llm/fake.py        scripted client; every test runs against this
+  llm/retry.py       backoff with jitter for transient failures
+  llm/anthropic_client.py  the real provider adapter
+  drafting/          request and response schemas, drafting service
+prompts/             versioned prompt files
+tests/               pytest suite
+docs/adr/            architecture decision records
+.github/workflows/   CI
 ```
 
 ## Roadmap
 
 | Module | Adds | Tag |
 | --- | --- | --- |
-| 0 | Repo, tooling, CI, Docker | v0.0 |
-| 1 | LLM endpoint with structured output | v0.1 |
+| 0 | Repo, tooling, CI, Docker ✅ | v0.0 |
+| 1 | LLM endpoint with structured output ✅ | v0.1 |
 | 2 | Postgres, migrations, tenant isolation | v0.2 |
 | 3 | Policy retrieval with pgvector, measured | v0.3 |
 | 4 | Agent with tools, SMS channel, review queue | v0.4 |
