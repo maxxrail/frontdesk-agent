@@ -1,0 +1,33 @@
+# Local development only. Production infrastructure arrives in Module 8 (Terraform).
+services:
+  api:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      FDA_ENV: local
+      FDA_DATABASE_URL: postgresql+psycopg://frontdesk:frontdesk@db:5432/frontdesk
+    depends_on:
+      db:
+        condition: service_healthy
+
+  # Postgres is here from day one so Module 2 needs no compose changes.
+  # pgvector/pgvector ships the extension Module 3 needs for retrieval.
+  db:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: frontdesk
+      POSTGRES_PASSWORD: frontdesk
+      POSTGRES_DB: frontdesk
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U frontdesk"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  pgdata:
