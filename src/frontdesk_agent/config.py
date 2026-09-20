@@ -26,6 +26,12 @@ class Settings(BaseSettings):
     # Module 2 fills this in; the default keeps local startup working.
     database_url: str = "postgresql+psycopg://frontdesk:frontdesk@localhost:5432/frontdesk"
 
+    # LLM provider. The key has no default on purpose: a missing key must fail
+    # loudly rather than silently fall back to some other credential.
+    anthropic_api_key: str = ""
+    llm_model: str = "claude-haiku-4-5-20251001"
+    llm_timeout_s: float = 20.0
+
 
 @lru_cache
 def get_settings() -> Settings:

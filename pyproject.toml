@@ -5,6 +5,7 @@ description = "Multi-tenant LLM agent service for appointment front offices, wit
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
+    "anthropic>=0.40",
     "fastapi>=0.115",
     "uvicorn[standard]>=0.30",
     "pydantic>=2.7",
