@@ -1,11 +1,18 @@
 """The provider-agnostic contract every LLM client implements."""
 
 from dataclasses import dataclass
-from typing import Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Protocol, runtime_checkable
+
+if TYPE_CHECKING:
+    from frontdesk_agent.llm.messages import AgentTurn, Message, ToolSpec
 
 
 class LLMError(Exception):
     """Base class for provider failures the application chooses to handle."""
+
+
+class LLMConfigurationError(LLMError):
+    """The provider is not configured (no API key). Not retryable; a 503."""
 
 
 class LLMTimeoutError(LLMError):
@@ -60,4 +67,17 @@ class LLMClient(Protocol):
         max_tokens: int = 1024,
     ) -> LLMCompletion:
         """Send one request and return the completion."""
+        ...
+
+    async def converse(
+        self,
+        *,
+        system: str,
+        messages: "list[Message]",
+        tools: "list[ToolSpec]",
+        prompt_name: str,
+        prompt_version: str,
+        max_tokens: int = 1024,
+    ) -> "AgentTurn":
+        """One step of a tool-using conversation (Module 4's agent loop)."""
         ...

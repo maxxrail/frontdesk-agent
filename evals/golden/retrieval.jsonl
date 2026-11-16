@@ -1,0 +1,60 @@
+{"id": "q01", "tenant": "maple-dental", "question": "how much notice do i need to give to cancel", "evidence": ["at least 24 hours' notice to cancel or reschedule"], "answerable": true}
+{"id": "q02", "tenant": "maple-dental", "question": "is there a charge if I cancel the morning of my appointment?", "evidence": ["$50 late cancellation fee"], "answerable": true}
+{"id": "q03", "tenant": "maple-dental", "question": "what happens if i just dont show up", "evidence": ["$75 missed appointment fee"], "answerable": true}
+{"id": "q04", "tenant": "maple-dental", "question": "I'm sick with the flu, will I still get charged for cancelling?", "evidence": ["We waive the late cancellation fee when you cancel because you are sick", "waive the late cancellation fee for documented emergencies, severe weather closures announced by the clinic, and illness"], "answerable": true}
+{"id": "q05", "tenant": "maple-dental", "question": "running 10 min behind is that ok", "evidence": ["hold your appointment for 15 minutes past the scheduled start", "reply LATE to your reminder text"], "answerable": true}
+{"id": "q06", "tenant": "maple-dental", "question": "what should I bring to my first appointment", "evidence": ["Bring photo identification, your insurance card, and a list of any medications"], "answerable": true}
+{"id": "q07", "tenant": "maple-dental", "question": "how long is the first visit for new patients", "evidence": ["A new patient exam takes about 90 minutes"], "answerable": true}
+{"id": "q08", "tenant": "maple-dental", "question": "do you bill sun life directly", "evidence": ["We direct-bill most major insurance providers, including Sun Life"], "answerable": true}
+{"id": "q09", "tenant": "maple-dental", "question": "do you take the government dental plan CDCP", "evidence": ["registered provider for the Canadian Dental Care Plan"], "answerable": true}
+{"id": "q10", "tenant": "maple-dental", "question": "can I find out what insurance covers before getting a crown", "evidence": ["we can send a pre-treatment estimate to your insurer"], "answerable": true}
+{"id": "q11", "tenant": "maple-dental", "question": "can I pay by e-transfer", "evidence": ["We accept debit, Visa, Mastercard, American Express, and e-transfer"], "answerable": true}
+{"id": "q12", "tenant": "maple-dental", "question": "do you have financing for expensive treatment", "evidence": ["we offer payment plans through a third-party financing partner"], "answerable": true}
+{"id": "q13", "tenant": "maple-dental", "question": "what's the price of a cleaning without insurance", "evidence": ["A regular adult checkup with cleaning is $185 before insurance"], "answerable": true}
+{"id": "q14", "tenant": "maple-dental", "question": "how much for my 8 year old's checkup", "evidence": ["A child's checkup and cleaning, for patients under 14, is $120"], "answerable": true}
+{"id": "q15", "tenant": "maple-dental", "question": "how much does a crown cost", "evidence": ["A porcelain crown is $1,350"], "answerable": true}
+{"id": "q16", "tenant": "maple-dental", "question": "price range for a root canal?", "evidence": ["Root canal treatment ranges from $900 for a front tooth to $1,400 for a molar"], "answerable": true}
+{"id": "q17", "tenant": "maple-dental", "question": "my tooth got knocked out playing hockey what do i do", "evidence": ["keep it moist in milk, and call us right away"], "answerable": true}
+{"id": "q18", "tenant": "maple-dental", "question": "can I get seen today for a toothache", "evidence": ["We keep two emergency slots open every weekday morning"], "answerable": true}
+{"id": "q19", "tenant": "maple-dental", "question": "who do I call at night if my face is swollen", "evidence": ["choose option 9 for the on-call dentist"], "answerable": true}
+{"id": "q20", "tenant": "maple-dental", "question": "are you open saturdays", "evidence": ["Saturday: 9 a.m. to 2 p.m., every second Saturday"], "answerable": true}
+{"id": "q21", "tenant": "maple-dental", "question": "where do i park", "evidence": ["Free patient parking is available in the lot behind the building"], "answerable": true}
+{"id": "q22", "tenant": "maple-dental", "question": "is the office wheelchair accessible", "evidence": ["The building has an elevator from the rear parking lot entrance"], "answerable": true}
+{"id": "q23", "tenant": "maple-dental", "question": "can i eat before my sedation appointment", "evidence": ["do not eat or drink anything except water for six hours"], "answerable": true}
+{"id": "q24", "tenant": "maple-dental", "question": "is it ok to use a straw after getting a tooth pulled", "evidence": ["drink through a straw for 24 hours"], "answerable": true}
+{"id": "q25", "tenant": "maple-dental", "question": "I'm nervous about the dentist, can you help", "evidence": ["Let us know when booking and we will schedule a longer appointment"], "answerable": true}
+{"id": "q26", "tenant": "maple-dental", "question": "how much do dental implants cost", "evidence": [], "answerable": false, "note": "implants are never mentioned"}
+{"id": "q27", "tenant": "maple-dental", "question": "do you offer laser gum surgery", "evidence": [], "answerable": false, "note": "not mentioned"}
+{"id": "q28", "tenant": "maple-dental", "question": "do you have a referral program that gives discounts", "evidence": [], "answerable": false, "note": "not mentioned"}
+{"id": "q29", "tenant": "maple-dental", "question": "what toothbrush brand do you recommend", "evidence": [], "answerable": false, "note": "not mentioned"}
+{"id": "q30", "tenant": "maple-dental", "question": "do you direct bill WSIB for injured workers", "evidence": [], "answerable": false, "note": "TRAP: answered only in Northside Physio's documents"}
+{"id": "q31", "tenant": "northside-physio", "question": "how far ahead do I have to cancel", "evidence": ["48 hours' notice to cancel or move an appointment"], "answerable": true}
+{"id": "q32", "tenant": "northside-physio", "question": "what's the fee if I miss my appointment", "evidence": ["missed appointments, are charged a $40 fee"], "answerable": true}
+{"id": "q33", "tenant": "northside-physio", "question": "can you waive the cancellation fee just this once", "evidence": ["We waive the fee once per calendar year"], "answerable": true}
+{"id": "q34", "tenant": "northside-physio", "question": "how long is the first appointment", "evidence": ["a 60-minute initial assessment"], "answerable": true}
+{"id": "q35", "tenant": "northside-physio", "question": "should I come early for my first visit", "evidence": ["arrive 10 minutes early to complete intake forms"], "answerable": true}
+{"id": "q36", "tenant": "northside-physio", "question": "what should I wear for a knee assessment", "evidence": ["Shorts are best for knee, hip or ankle problems"], "answerable": true}
+{"id": "q37", "tenant": "northside-physio", "question": "how much is a 45 minute follow up", "evidence": ["Follow-up treatment, 45 minutes: $110"], "answerable": true}
+{"id": "q38", "tenant": "northside-physio", "question": "price for an hour of massage", "evidence": ["$125 for 60 minutes"], "answerable": true}
+{"id": "q39", "tenant": "northside-physio", "question": "how much does acupuncture cost", "evidence": ["Acupuncture added to a physiotherapy session is $25", "A stand-alone acupuncture session is $80"], "answerable": true}
+{"id": "q40", "tenant": "northside-physio", "question": "do you direct bill green shield", "evidence": ["We direct-bill Manulife, Sun Life, Green Shield"], "answerable": true}
+{"id": "q41", "tenant": "northside-physio", "question": "is physio covered by OHIP", "evidence": ["not covered by OHIP"], "answerable": true}
+{"id": "q42", "tenant": "northside-physio", "question": "do i need a doctors note to see you", "evidence": ["You can book directly without a referral", "Many insurance plans require a doctor's referral"], "answerable": true}
+{"id": "q43", "tenant": "northside-physio", "question": "can I pay with amex", "evidence": ["We do not accept cash or American Express"], "answerable": true}
+{"id": "q44", "tenant": "northside-physio", "question": "why do you need my credit card when booking", "evidence": ["It is charged only for late cancellation fees"], "answerable": true}
+{"id": "q45", "tenant": "northside-physio", "question": "what time do you open on tuesdays", "evidence": ["Tuesday and Thursday: 10 a.m. to 8 p.m."], "answerable": true}
+{"id": "q46", "tenant": "northside-physio", "question": "are you open on boxing day", "evidence": ["open on Boxing Day from 9 a.m. to 1 p.m."], "answerable": true}
+{"id": "q47", "tenant": "northside-physio", "question": "where are you located", "evidence": ["88 King Road, Unit 3"], "answerable": true}
+{"id": "q48", "tenant": "northside-physio", "question": "I was hurt at work, do you take WSIB", "evidence": ["We treat injured workers with active WSIB claims"], "answerable": true}
+{"id": "q49", "tenant": "northside-physio", "question": "I was in a car accident, can you bill my auto insurance", "evidence": ["we bill your auto insurer under the Minor Injury Guideline"], "answerable": true}
+{"id": "q50", "tenant": "northside-physio", "question": "can I book a massage without seeing a physio first", "evidence": ["Massage therapy can be booked on its own"], "answerable": true}
+{"id": "q51", "tenant": "northside-physio", "question": "is acupuncture safe if I'm pregnant", "evidence": ["Tell your therapist if you are pregnant"], "answerable": true}
+{"id": "q52", "tenant": "northside-physio", "question": "the exercises hurt what should i do", "evidence": ["stop doing it and tell your physiotherapist"], "answerable": true}
+{"id": "q53", "tenant": "northside-physio", "question": "can my 15 year old come alone", "evidence": ["A parent or guardian must attend the first visit for patients under 16"], "answerable": true}
+{"id": "q54", "tenant": "northside-physio", "question": "do you do concussion rehab", "evidence": ["certified in concussion rehabilitation"], "answerable": true}
+{"id": "q55", "tenant": "northside-physio", "question": "I have a cold, can I do my appointment online", "evidence": ["switch your appointment to a virtual physiotherapy session"], "answerable": true}
+{"id": "q56", "tenant": "northside-physio", "question": "do you offer chiropractic adjustments", "evidence": [], "answerable": false, "note": "not mentioned"}
+{"id": "q57", "tenant": "northside-physio", "question": "do you offer pelvic floor physiotherapy", "evidence": [], "answerable": false, "note": "not mentioned"}
+{"id": "q58", "tenant": "northside-physio", "question": "what is the wait time for a new patient appointment", "evidence": [], "answerable": false, "note": "not mentioned"}
+{"id": "q59", "tenant": "northside-physio", "question": "do you offer shockwave therapy", "evidence": [], "answerable": false, "note": "not mentioned"}
+{"id": "q60", "tenant": "northside-physio", "question": "how much is teeth whitening", "evidence": [], "answerable": false, "note": "TRAP: answered only in Maple Dental's documents"}

@@ -1,0 +1,155 @@
+"""The human review queue, and the conversation log a reviewer needs.
+
+Approve, edit-and-approve (approve with your own ``reply``), or reject. The
+tenant comes from the URL until Module 6 binds it to the reviewer's login.
+"""
+
+import uuid
+from datetime import datetime
+from typing import Annotated, Any
+
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from pydantic import BaseModel, ConfigDict, Field
+
+from frontdesk_agent.api.tenants import Session, TenantId
+from frontdesk_agent.db.models import (
+    MessageDirection,
+    MessageStatus,
+    ReviewKind,
+    ReviewStatus,
+)
+from frontdesk_agent.db.repositories import (
+    ConversationRepository,
+    NotFoundError,
+    ReviewRepository,
+    SmsMessageRepository,
+)
+from frontdesk_agent.dependencies import get_services
+from frontdesk_agent.frontdesk.ports import Effects
+from frontdesk_agent.frontdesk.service import ReviewAlreadyDecidedError, ReviewNeedsReplyError
+from frontdesk_agent.services import Services
+
+router = APIRouter(prefix="/v1/tenants/{tenant_id}", tags=["review"])
+
+
+class ReviewOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    conversation_id: uuid.UUID
+    kind: ReviewKind
+    status: ReviewStatus
+    reason: str
+    client_message: str
+    proposed_reply: str
+    action: dict[str, Any] | None
+    final_reply: str | None
+    decided_by: str | None
+    decided_at: datetime | None
+    created_at: datetime
+
+
+class Decision(BaseModel):
+    reviewer: str = Field(min_length=1, max_length=120)
+    reply: str | None = Field(
+        default=None,
+        max_length=1600,
+        description="Approve: replaces the drafted reply. Reject: optional message to send.",
+    )
+
+
+class MessageOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    direction: MessageDirection
+    status: MessageStatus
+    body: str
+    created_at: datetime
+
+
+@router.get("/reviews", response_model=list[ReviewOut])
+async def list_reviews(
+    tenant_id: TenantId,
+    session: Session,
+    status_filter: Annotated[ReviewStatus | None, Query(alias="status")] = ReviewStatus.PENDING,
+    limit: Annotated[int, Query(ge=1, le=200)] = 50,
+) -> list[ReviewOut]:
+    items = await ReviewRepository(session, tenant_id).by_status(status_filter, limit=limit)
+    return [ReviewOut.model_validate(i) for i in items]
+
+
+@router.get("/reviews/{review_id}", response_model=ReviewOut)
+async def get_review(tenant_id: TenantId, review_id: uuid.UUID, session: Session) -> ReviewOut:
+    try:
+        return ReviewOut.model_validate(await ReviewRepository(session, tenant_id).get(review_id))
+    except NotFoundError as exc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Review item not found.") from exc
+
+
+async def _decide(
+    services: Services,
+    session: Session,
+    tenant_id: uuid.UUID,
+    review_id: uuid.UUID,
+    body: Decision,
+    *,
+    approve: bool,
+) -> ReviewOut:
+    effects = Effects()
+    try:
+        item = await services.frontdesk.decide(
+            session,
+            tenant_id,
+            review_id,
+            effects,
+            approve=approve,
+            reply=body.reply,
+            reviewer=body.reviewer,
+        )
+    except NotFoundError as exc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Review item not found.") from exc
+    except ReviewAlreadyDecidedError as exc:
+        raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
+    except ReviewNeedsReplyError as exc:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(exc)) from exc
+    await session.commit()
+    out = ReviewOut.model_validate(item)
+    await effects.flush(session, services.sender, services.queue)
+    return out
+
+
+@router.post("/reviews/{review_id}/approve", response_model=ReviewOut)
+async def approve(
+    tenant_id: TenantId,
+    review_id: uuid.UUID,
+    body: Decision,
+    session: Session,
+    services: Annotated[Services, Depends(get_services)],
+) -> ReviewOut:
+    """Run the held action and send the reply (``reply`` overrides the draft)."""
+    return await _decide(services, session, tenant_id, review_id, body, approve=True)
+
+
+@router.post("/reviews/{review_id}/reject", response_model=ReviewOut)
+async def reject(
+    tenant_id: TenantId,
+    review_id: uuid.UUID,
+    body: Decision,
+    session: Session,
+    services: Annotated[Services, Depends(get_services)],
+) -> ReviewOut:
+    """Do not run the held action. Sends ``reply`` only if one is given."""
+    return await _decide(services, session, tenant_id, review_id, body, approve=False)
+
+
+@router.get("/conversations/{conversation_id}/messages", response_model=list[MessageOut])
+async def conversation_messages(
+    tenant_id: TenantId, conversation_id: uuid.UUID, session: Session
+) -> list[MessageOut]:
+    try:
+        await ConversationRepository(session, tenant_id).get(conversation_id)
+    except NotFoundError as exc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Conversation not found.") from exc
+    msgs = await SmsMessageRepository(session, tenant_id).in_conversation(conversation_id)
+    return [MessageOut.model_validate(m) for m in msgs]

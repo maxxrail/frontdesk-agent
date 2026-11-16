@@ -32,6 +32,31 @@ class Settings(BaseSettings):
     llm_model: str = "claude-haiku-4-5-20251001"
     llm_timeout_s: float = 20.0
 
+    # Retrieval, chosen from measurements (ADR 0008). Vector search beat hybrid
+    # on the golden set with the current embedder; hybrid stays one setting away.
+    retrieval_mode: Literal["vector", "keyword", "hybrid"] = "vector"
+    retrieval_k: int = 5
+    # Below every answerable question in the golden set (lowest: 0.14). It only
+    # stops gibberish from costing a model call; the model decides what the
+    # documents do not cover.
+    retrieval_min_similarity: float = 0.12
+
+    # SMS channel (Module 4). The auth token has no default: without it the
+    # webhook refuses every request rather than accepting unsigned ones.
+    twilio_account_sid: str = ""
+    twilio_auth_token: str = ""
+    # The public URL Twilio calls, e.g. https://abc.ngrok.app. Twilio signs the
+    # exact URL it requested, which behind a tunnel or load balancer is not
+    # the URL this process sees, so it must be configured, not inferred.
+    public_base_url: str = "http://localhost:8000"
+    # "twilio" sends real texts; "console" prints them (local development).
+    sms_sender: Literal["twilio", "console"] = "console"
+
+    # Background jobs: "redis" for the arq worker, "inline" to run them inside
+    # the API process (local development without Redis).
+    job_queue: Literal["redis", "inline"] = "inline"
+    redis_url: str = "redis://localhost:6379/0"
+
 
 @lru_cache
 def get_settings() -> Settings:
