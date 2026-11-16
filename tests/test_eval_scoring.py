@@ -1,6 +1,7 @@
 """Checks, gate, budget and judge parsing: the parts of the eval suite that
 decide pass or fail. Free and database-free."""
 
+from dataclasses import replace
 from decimal import Decimal
 from typing import Any
 
@@ -11,7 +12,15 @@ from frontdesk_agent.evaluation.budget import Budget, BudgetedClient, BudgetExce
 from frontdesk_agent.evaluation.cases import Case, Expect, Feature
 from frontdesk_agent.evaluation.checks import check_case, expected, universal
 from frontdesk_agent.evaluation.database import UnsafeDatabaseError, check_safe
-from frontdesk_agent.evaluation.judge import JudgeItem, Verdict, parse, rate, render
+from frontdesk_agent.evaluation.judge import (
+    JudgeItem,
+    Verdict,
+    judge_item,
+    judge_thinking,
+    parse,
+    rate,
+    render,
+)
 from frontdesk_agent.evaluation.results import CaseResult, gate, render_markdown, summarise
 from frontdesk_agent.evaluation.runner import CaseRun, Review, ToolCall, Turn
 from frontdesk_agent.llm.base import LLMCompletion
@@ -266,6 +275,21 @@ def test_judge_output_is_parsed_strictly() -> None:
         )
     with pytest.raises(ValueError):
         parse("I think it was fine.")
+
+
+async def test_a_cut_off_verdict_is_reported_not_parsed() -> None:
+    """52 of 129 verdicts in a CI run hit max_tokens; say so instead of 'no JSON'."""
+
+    class CutOff(FakeLLMClient):
+        async def complete(self, **kw: Any) -> LLMCompletion:
+            out = await super().complete(**kw)
+            return replace(out, stop_reason="max_tokens")
+
+    item = JudgeItem("x", "dental office", ["hi"], [], "Hello!")
+    got = await judge_item(CutOff(['{"tone": "pass"'] * 2), item)
+    assert isinstance(got, str) and "max_tokens" in got
+    assert judge_thinking("claude-sonnet-5-5") == {"type": "between_tools"}
+    assert judge_thinking("claude-haiku-4-5") is None
 
 
 def test_judge_prompt_carries_the_excerpts_and_rates_skip_na() -> None:

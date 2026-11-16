@@ -94,14 +94,17 @@ class CannedClient:
         )
 
 
-def real_client(model: str) -> LLMClient:
+def real_client(model: str, thinking: dict[str, str] | None = None) -> LLMClient:
     from frontdesk_agent.llm.anthropic_client import AnthropicLLMClient
 
     settings = get_settings()
     if not settings.anthropic_api_key:
         sys.exit("FDA_ANTHROPIC_API_KEY is not set (in .env or the environment).")
     return AnthropicLLMClient(
-        settings.anthropic_api_key, model=model, timeout_s=settings.llm_timeout_s
+        settings.anthropic_api_key,
+        model=model,
+        timeout_s=settings.llm_timeout_s,
+        thinking=dict(thinking) if thinking else None,
     )
 
 
@@ -167,8 +170,8 @@ async def main_async(
 
     budget = Budget(Decimal(args.budget))
 
-    def client(for_model: str) -> BudgetedClient:
-        inner: LLMClient = CannedClient() if args.dry_run else real_client(for_model)
+    def client(for_model: str, thinking: dict[str, str] | None = None) -> BudgetedClient:
+        inner: LLMClient = CannedClient() if args.dry_run else real_client(for_model, thinking)
         return BudgetedClient(inner, budget, allow_unpriced=args.dry_run)
 
     llm = client(model)
@@ -199,10 +202,12 @@ async def main_async(
             print("policy answers: 60 golden questions")
             report["layers"]["policy_answers"] = await run_policy_layer(llm, url, args.dry_run)
         if "judge" in layers and not stopped:
-            from frontdesk_agent.evaluation.judge import judge_results
+            from frontdesk_agent.evaluation.judge import judge_results, judge_thinking
 
             report["layers"]["judge"] = await judge_results(
-                client(args.judge_model), results, dry_run=args.dry_run
+                client(args.judge_model, judge_thinking(args.judge_model)),
+                results,
+                dry_run=args.dry_run,
             )
         if "sim" in layers and not stopped:
             from frontdesk_agent.evaluation.simulation import run_simulations

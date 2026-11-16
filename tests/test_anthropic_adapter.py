@@ -92,6 +92,26 @@ async def test_converse_round_trip_through_the_real_sdk() -> None:
     assert turn.model == "claude-haiku-4-5-20251001"
 
 
+async def test_thinking_setting_is_sent_only_when_given() -> None:
+    bodies: list[dict[str, Any]] = []
+    text_reply = {
+        **TOOL_RESPONSE,
+        "content": [{"type": "text", "text": "{}"}],
+        "stop_reason": "end_turn",
+    }
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        bodies.append(json.loads(request.content))
+        return httpx.Response(200, json=text_reply)
+
+    http = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+    off = AnthropicLLMClient("k", http_client=http, thinking={"type": "between_tools"})
+    await off.complete(system="s", user="u", prompt_name="judge", prompt_version="v1")
+    await client_with(handler).complete(system="s", user="u", prompt_name="p", prompt_version="v1")
+    assert bodies[0]["thinking"] == {"type": "between_tools"}
+    assert "thinking" not in bodies[1]
+
+
 @pytest.mark.parametrize(
     ("status", "error"), [(429, LLMRateLimitError), (529, LLMServerError), (400, LLMError)]
 )

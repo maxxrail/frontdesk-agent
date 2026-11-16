@@ -38,7 +38,11 @@ class AnthropicLLMClient:
         model: str = "claude-haiku-4-5-20251001",
         timeout_s: float = 20.0,
         http_client: Any = None,  # tests inject an httpx client with a mock transport
+        thinking: dict[str, Any] | None = None,
     ) -> None:
+        """``thinking`` is sent as is on every request. Newer models think by
+        default, and thinking tokens count against ``max_tokens``, so a short
+        structured call (the eval judge) may need it switched off."""
         try:
             from anthropic import AsyncAnthropic
         except ImportError as exc:  # pragma: no cover - exercised only without the SDK
@@ -48,6 +52,7 @@ class AnthropicLLMClient:
 
         self._client = AsyncAnthropic(api_key=api_key, timeout=timeout_s, http_client=http_client)
         self._model = model
+        self._extra: dict[str, Any] = {"thinking": thinking} if thinking else {}
 
     async def complete(
         self,
@@ -65,6 +70,7 @@ class AnthropicLLMClient:
             max_tokens=max_tokens,
             system=system,
             messages=[{"role": "user", "content": user}],
+            **self._extra,
         )
 
         latency_ms = int((time.perf_counter() - started) * 1000)
@@ -101,6 +107,7 @@ class AnthropicLLMClient:
                 {"name": t.name, "description": t.description, "input_schema": t.input_schema}
                 for t in tools
             ],
+            **self._extra,
         )
         content: list[Block] = []
         for block in response.content:
