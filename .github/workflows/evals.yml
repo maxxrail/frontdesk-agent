@@ -1,0 +1,130 @@
+name: Evals
+
+# The eval suite calls the real model, so it costs money (about $3 a run on
+# Haiku 4.5, capped by --budget). It runs only when something that changes
+# the agent's behaviour changes, or the evals themselves do. Everything else
+# is covered by the free CI workflow.
+on:
+  pull_request:
+    paths:
+      - "prompts/**"
+      - "src/frontdesk_agent/agent/**"
+      - "src/frontdesk_agent/config.py" # the model and prompt-version settings
+      - "src/frontdesk_agent/evaluation/**"
+      - "evals/cases/**"
+      - "evals/scenarios.jsonl"
+      - "evals/thresholds.json"
+      - "evals/baseline.json"
+      - ".github/workflows/evals.yml"
+  workflow_dispatch:
+    inputs:
+      model:
+        description: "Agent model (blank: the configured default)"
+        required: false
+      prompt_version:
+        description: "Agent prompt version (blank: the configured default)"
+        required: false
+      layers:
+        description: "Layers to run"
+        default: "agent,policy,judge,sim"
+      budget:
+        description: "Hard cap in USD"
+        default: "3.00"
+
+concurrency:
+  group: evals-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pull-requests: write # to post the score table
+
+jobs:
+  evals:
+    name: Eval suite (real model)
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: frontdesk
+          POSTGRES_PASSWORD: frontdesk
+          POSTGRES_DB: frontdesk
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U frontdesk"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    env:
+      FDA_DATABASE_URL: postgresql+psycopg://frontdesk:frontdesk@localhost:5432/frontdesk
+      FDA_EVAL_DATABASE_URL: postgresql+psycopg://frontdesk:frontdesk@localhost:5432/frontdesk_eval
+      FDA_ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+
+      - name: Set up Python
+        run: uv python install 3.12
+
+      - name: Install dependencies
+        run: uv sync --extra dev
+
+      - name: The API key secret is configured
+        run: |
+          if [ -z "$FDA_ANTHROPIC_API_KEY" ]; then
+            echo "::error::Add ANTHROPIC_API_KEY under Settings > Secrets and variables > Actions."
+            exit 1
+          fi
+
+      - name: Run the eval suite
+        id: suite
+        env:
+          MODEL: ${{ inputs.model }}
+          PROMPT_VERSION: ${{ inputs.prompt_version }}
+          LAYERS: ${{ inputs.layers || 'agent,policy,judge,sim' }}
+          BUDGET: ${{ inputs.budget || '3.00' }}
+        run: |
+          args=(--gate --markdown eval-summary.md --out eval-results.json
+                --layers "$LAYERS" --budget "$BUDGET")
+          [ -n "$MODEL" ] && args+=(--model "$MODEL")
+          [ -n "$PROMPT_VERSION" ] && args+=(--prompt-version "$PROMPT_VERSION")
+          set +e
+          uv run python evals/run.py "${args[@]}"
+          echo "exit=$?" >> "$GITHUB_OUTPUT"
+
+      - name: Score table in the job summary
+        if: always()
+        run: '[ -f eval-summary.md ] && cat eval-summary.md >> "$GITHUB_STEP_SUMMARY" || true'
+
+      - name: Post the score table on the PR
+        if: always() && github.event_name == 'pull_request' && hashFiles('eval-summary.md') != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          marker="<!-- eval-suite -->"
+          { echo "$marker"; cat eval-summary.md; } > comment.md
+          id=$(gh api "repos/$GITHUB_REPOSITORY/issues/$PR/comments" --paginate \
+                 --jq ".[] | select(.body | startswith(\"$marker\")) | .id" | tail -1)
+          if [ -n "$id" ]; then
+            gh api -X PATCH "repos/$GITHUB_REPOSITORY/issues/comments/$id" -F body=@comment.md >/dev/null
+          else
+            gh pr comment "$PR" --body-file comment.md
+          fi
+
+      - name: Keep the results file
+        if: always() && hashFiles('eval-results.json') != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: eval-results
+          path: eval-results.json
+
+      - name: Fail if the suite is below its thresholds
+        run: exit "${{ steps.suite.outputs.exit }}"

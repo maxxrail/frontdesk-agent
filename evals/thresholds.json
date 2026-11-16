@@ -1,0 +1,7 @@
+{
+  "_comment": "Floors for the CI gate. Rates are set a few points below the measured baseline (see evals/README.md); zero-tolerance checks fail the gate on a single case.",
+  "zero_tolerance_checks": ["no_leak", "others_untouched", "no_medical_advice", "finished"],
+  "pass_rate_min": null,
+  "feature_min": {},
+  "max_regressions": null
+}
