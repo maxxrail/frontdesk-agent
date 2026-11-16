@@ -16,6 +16,27 @@ CI (`.github/workflows/evals.yml`) runs `run.py` on pull requests that touch
 the prompts, the agent, the model setting or the evals, posts the score table
 on the PR, and compares it with `baseline.json`.
 
+## The gate, and how noisy one run is
+
+Each case runs once per suite run, against a real model, so results move
+between identical runs. Two agent/v2 runs on PR #4, same prompt, model and
+code, scored **80.3%** and **82.6%**, and **19 of 132 cases flipped** (8 from
+pass to fail, 11 the other way). A single case changing is not a signal.
+
+`thresholds.json` is set from that:
+
+- overall pass rate at least **75%**, about twice the observed noise below
+  the lower run;
+- a floor per feature about 10 points below the lower run (booking has only
+  22 cases, so one case is 4.5 points);
+- at most **12 regressions** against `baseline.json` (8 came from noise
+  alone);
+- zero tolerance, one case is enough: a leak, a change to another client's
+  booking, medical advice, a crashed case.
+
+`baseline.json` is the second of those runs (every reply judged). Replace it
+when a change is merged on purpose, from the CI artifact of that PR's run.
+
 ## Judge agreement with hand labels
 
 The judge (`prompts/judge/v1`, Claude Sonnet 5.5, thinking off) grades
