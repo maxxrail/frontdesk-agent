@@ -28,7 +28,7 @@ from typing import Any
 from frontdesk_agent import aio
 from frontdesk_agent.config import get_settings
 from frontdesk_agent.evaluation.budget import Budget, BudgetedClient
-from frontdesk_agent.evaluation.judge import JudgeItem, Verdict, judge_items, judge_thinking
+from frontdesk_agent.evaluation.judge import JudgeItem, Verdict, judge_items
 
 ROOT = Path(__file__).resolve().parent.parent
 LABELS = ROOT / "evals" / "judge" / "labels.csv"
@@ -126,13 +126,7 @@ async def agree(budget_usd: str, model: str) -> dict[str, Any]:
     if not settings.anthropic_api_key:
         sys.exit("FDA_ANTHROPIC_API_KEY is not set")
     budget = Budget(Decimal(budget_usd))
-    thinking = judge_thinking(model)
-    llm = BudgetedClient(
-        AnthropicLLMClient(
-            settings.anthropic_api_key, model=model, thinking=dict(thinking) if thinking else None
-        ),
-        budget,
-    )
+    llm = BudgetedClient(AnthropicLLMClient(settings.anthropic_api_key, model=model), budget)
     items = [
         JudgeItem(
             r["id"],

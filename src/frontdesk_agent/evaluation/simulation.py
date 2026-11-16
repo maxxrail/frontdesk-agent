@@ -19,7 +19,7 @@ from frontdesk_agent.demo_clinics import CLINICS
 from frontdesk_agent.evaluation.cases import Case, Difficulty, Expect, Slot, TenantSlug, _Strict
 from frontdesk_agent.evaluation.checks import check_case
 from frontdesk_agent.evaluation.runner import EvalContext, NextMessage, Turn, run_case
-from frontdesk_agent.llm.base import LLMClient
+from frontdesk_agent.llm.base import LLMClient, LLMError
 from frontdesk_agent.prompts import load_prompt
 
 PROMPT_NAME = "client_sim"
@@ -92,6 +92,10 @@ def client_writer(sim_llm: LLMClient, scenario: Scenario) -> NextMessage:
             prompt_version=PROMPT_VERSION,
             max_tokens=80,
         )
+        if out.stop_reason == "max_tokens" and not out.text.strip():
+            # An empty reply would read as "the client is done" and end the
+            # conversation early; a cut-off reply is a failure to report.
+            raise LLMError(f"simulated client cut off at max_tokens ({out.output_tokens} tokens)")
         text = out.text.strip().strip('"')
         return None if not text or DONE in text else text
 

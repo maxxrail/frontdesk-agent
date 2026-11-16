@@ -5,7 +5,7 @@ run, without the vendor SDK installed.
 """
 
 import time
-from typing import Any
+from typing import Any, Literal
 
 from frontdesk_agent.llm.base import (
     LLMCompletion,
@@ -22,6 +22,7 @@ from frontdesk_agent.llm.messages import (
     ToolSpec,
     ToolUseBlock,
 )
+from frontdesk_agent.llm.thinking import thinking_off
 
 
 class AnthropicLLMClient:
@@ -38,11 +39,10 @@ class AnthropicLLMClient:
         model: str = "claude-haiku-4-5-20251001",
         timeout_s: float = 20.0,
         http_client: Any = None,  # tests inject an httpx client with a mock transport
-        thinking: dict[str, Any] | None = None,
+        thinking: dict[str, Any] | None | Literal["off"] = "off",
     ) -> None:
-        """``thinking`` is sent as is on every request. Newer models think by
-        default, and thinking tokens count against ``max_tokens``, so a short
-        structured call (the eval judge) may need it switched off."""
+        """``thinking`` is sent as is on every request; the default turns
+        thinking off in the form ``model`` accepts (see llm/thinking.py)."""
         try:
             from anthropic import AsyncAnthropic
         except ImportError as exc:  # pragma: no cover - exercised only without the SDK
@@ -52,6 +52,8 @@ class AnthropicLLMClient:
 
         self._client = AsyncAnthropic(api_key=api_key, timeout=timeout_s, http_client=http_client)
         self._model = model
+        if thinking == "off":
+            thinking = thinking_off(model)
         self._extra: dict[str, Any] = {"thinking": thinking} if thinking else {}
 
     async def complete(

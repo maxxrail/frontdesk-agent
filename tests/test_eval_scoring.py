@@ -16,7 +16,6 @@ from frontdesk_agent.evaluation.judge import (
     JudgeItem,
     Verdict,
     judge_item,
-    judge_thinking,
     parse,
     rate,
     render,
@@ -288,8 +287,6 @@ async def test_a_cut_off_verdict_is_reported_not_parsed() -> None:
     item = JudgeItem("x", "dental office", ["hi"], [], "Hello!")
     got = await judge_item(CutOff(['{"tone": "pass"'] * 2), item)
     assert isinstance(got, str) and "max_tokens" in got
-    assert judge_thinking("claude-sonnet-5-5") == {"type": "between_tools"}
-    assert judge_thinking("claude-haiku-4-5") is None
 
 
 def test_judge_prompt_carries_the_excerpts_and_rates_skip_na() -> None:

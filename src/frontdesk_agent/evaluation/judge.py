@@ -23,21 +23,9 @@ from frontdesk_agent.prompts import load_prompt
 
 PROMPT_NAME = "judge"
 PROMPT_VERSION = "v1"
-# Room for the JSON verdict. Thinking is switched off for the judge (see
-# judge_thinking), so this is the answer alone.
+# Room for the JSON verdict. The adapter turns thinking off (llm/thinking.py),
+# so this is the answer alone.
 MAX_TOKENS = 1024
-
-
-def judge_thinking(model: str) -> dict[str, str] | None:
-    """Thinking off for the judge, in the form its model accepts.
-
-    Sonnet 5.5 thinks by default and its thinking counts against max_tokens:
-    at 300 tokens, 52 of 129 verdicts in a CI run came back cut off or empty.
-    It rejects {"type": "disabled"}; "between_tools" is its off switch. A
-    short pass/fail grade does not need thinking, and it would multiply the
-    judge's cost per run.
-    """
-    return {"type": "between_tools"} if model.startswith("claude-sonnet-5-5") else None
 
 
 MAX_EXCERPT_CHARS = 700

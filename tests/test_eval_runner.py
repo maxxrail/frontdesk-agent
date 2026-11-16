@@ -201,6 +201,35 @@ async def test_a_simulated_client_drives_a_conversation(ctx: EvalContext) -> Non
     assert out["rows"][0]["turns"] == 1  # the fake client says [DONE] after one reply
 
 
+async def test_a_cut_off_simulated_client_fails_instead_of_ending_the_conversation() -> None:
+    """Seen in the PR #4 runs: Haiku 5.5 thought through its 80 tokens, the
+    empty reply read as "done", and the agent's question went unanswered."""
+    from frontdesk_agent.evaluation.simulation import client_writer
+    from frontdesk_agent.llm.base import LLMError
+
+    class CutOff:
+        model = "claude-haiku-5-5"
+
+        async def complete(self, **kw: object) -> LLMCompletion:
+            return LLMCompletion("", self.model, 10, 80, 1, "p", "v1", stop_reason="max_tokens")
+
+        async def converse(self, **kw: object) -> AgentTurn:
+            raise NotImplementedError
+
+    scenario = Scenario(
+        id="sim-cut-off",
+        difficulty="easy",
+        persona="p",
+        goal="g",
+        opening="hi",
+        expect=Expect(booked=()),
+    )
+    next_message = client_writer(CutOff(), scenario)
+    assert await next_message([]) == "hi"  # the opening is scripted
+    with pytest.raises(LLMError, match="max_tokens"):
+        await next_message([Turn("hi", "agent_reply", ["Which day works for you?"])])
+
+
 def test_turn_type_is_what_simulation_transcripts_use() -> None:
     from frontdesk_agent.evaluation.simulation import transcript
 
