@@ -8,7 +8,6 @@ machine. Phone numbers use the 555-01xx range reserved for fiction.
 """
 
 import argparse
-import asyncio
 import random
 from datetime import UTC, datetime, time, timedelta
 from pathlib import Path
@@ -16,6 +15,7 @@ from pathlib import Path
 from faker import Faker
 from sqlalchemy import text
 
+from frontdesk_agent import aio
 from frontdesk_agent.config import get_settings
 from frontdesk_agent.db.models import Client, Provider, ProviderSchedule, WaitlistEntry
 from frontdesk_agent.db.repositories import (
@@ -133,7 +133,7 @@ def main() -> None:
     args = parser.parse_args()
     if not 1 <= args.clients <= MAX_CLIENTS:
         parser.error(f"--clients must be between 1 and {MAX_CLIENTS}")
-    asyncio.run(seed(args.clients, args.reset, args.sms_number))
+    aio.run(seed(args.clients, args.reset, args.sms_number))
 
 
 if __name__ == "__main__":

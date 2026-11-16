@@ -17,13 +17,13 @@ roughly 60 calls x ~900 input tokens: well under $0.10.
 """
 
 import argparse
-import asyncio
 import json
 import statistics
 from datetime import date
 from decimal import Decimal
 from pathlib import Path
 
+from frontdesk_agent import aio
 from frontdesk_agent.answering.service import PolicyAnswerer
 from frontdesk_agent.config import get_settings
 from frontdesk_agent.db.models import LLMCall
@@ -190,7 +190,7 @@ def write(summary: dict[str, object]) -> Path:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--dry-run", action="store_true", help="scripted model, no API calls")
-    summary = asyncio.run(run(parser.parse_args().dry_run))
+    summary = aio.run(run(parser.parse_args().dry_run))
     for k, v in summary.items():
         if k != "rows":
             print(f"{k:>22}: {v}")

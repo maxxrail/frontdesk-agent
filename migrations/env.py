@@ -1,11 +1,11 @@
 """Alembic environment: runs migrations over the app's async engine."""
 
-import asyncio
 from logging.config import fileConfig
 
 from alembic import context
 from sqlalchemy.engine import Connection
 
+from frontdesk_agent import aio
 from frontdesk_agent.config import get_settings
 from frontdesk_agent.db import models  # noqa: F401  (registers tables on the metadata)
 from frontdesk_agent.db.base import Base
@@ -51,4 +51,4 @@ async def run_migrations_online() -> None:
 if context.is_offline_mode():
     run_migrations_offline()
 else:
-    asyncio.run(run_migrations_online())
+    aio.run(run_migrations_online())

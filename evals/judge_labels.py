@@ -16,7 +16,6 @@ labels.
 """
 
 import argparse
-import asyncio
 import csv
 import json
 import random
@@ -26,6 +25,7 @@ from decimal import Decimal
 from pathlib import Path
 from typing import Any
 
+from frontdesk_agent import aio
 from frontdesk_agent.config import get_settings
 from frontdesk_agent.evaluation.budget import Budget, BudgetedClient
 from frontdesk_agent.evaluation.judge import JudgeItem, Verdict, judge_items
@@ -184,7 +184,7 @@ def main() -> None:
     if args.cmd == "export":
         export(args.results, args.n)
         return
-    out = asyncio.run(agree(args.budget, args.judge_model))
+    out = aio.run(agree(args.budget, args.judge_model))
     AGREEMENT.write_text(json.dumps(out, indent=2) + "\n", encoding="utf-8")
     for field in ("tone", "faithfulness"):
         d = out[field]

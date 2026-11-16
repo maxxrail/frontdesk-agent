@@ -5,6 +5,7 @@ missing Redis fails the build instead of skipping.
 """
 
 import os
+import sys
 import uuid
 from collections.abc import AsyncIterator
 from typing import Any
@@ -50,6 +51,9 @@ async def desk(db_url: str, world: World) -> AsyncIterator[Desk]:
     await d.dispose()
 
 
+# arq's Worker.close() sends SIGUSR1, which Windows lacks. The job itself runs
+# fine there; CI (Linux) runs the whole test.
+@pytest.mark.skipif(sys.platform == "win32", reason="arq Worker.close() needs SIGUSR1")
 async def test_inbound_turn_runs_on_the_worker(redis_ok: None, desk: Desk, world: World) -> None:
     async with desk.services.sessionmaker() as s:
         tenant = await TenantDirectory(s).get(world.tenant_id)

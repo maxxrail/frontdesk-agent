@@ -8,11 +8,11 @@ documents are skipped, so this is safe to run on every deploy.
 """
 
 import argparse
-import asyncio
 from pathlib import Path
 
 from sqlalchemy import select
 
+from frontdesk_agent import aio
 from frontdesk_agent.config import get_settings
 from frontdesk_agent.db.models import Tenant
 from frontdesk_agent.db.session import make_engine, make_sessionmaker
@@ -51,7 +51,7 @@ async def run(only_slug: str | None) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--slug", help="only this tenant")
-    asyncio.run(run(parser.parse_args().slug))
+    aio.run(run(parser.parse_args().slug))
 
 
 if __name__ == "__main__":

@@ -11,7 +11,6 @@ default) because every test truncates it.
     FDA_SKIP_DB_TESTS=1     skip every database test
 """
 
-import asyncio
 import os
 from collections.abc import AsyncIterator, Iterator
 
@@ -23,9 +22,12 @@ from fastapi.testclient import TestClient
 from sqlalchemy import make_url, text
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
+from frontdesk_agent import aio
 from frontdesk_agent.config import get_settings
 from frontdesk_agent.db.session import make_engine, make_sessionmaker
 from frontdesk_agent.main import create_app
+
+aio.use_selector_loop_policy()
 
 UNREACHABLE_DB = "postgresql+psycopg://nobody:nothing@127.0.0.1:1/none"
 
@@ -76,7 +78,7 @@ def db_url() -> str:
         pytest.skip("FDA_SKIP_DB_TESTS=1")
     url = _test_db_url()
     try:
-        asyncio.run(_ensure_database(url))
+        aio.run(_ensure_database(url))
     except Exception as exc:  # unreachable, auth failure, no CREATEDB...
         if os.environ.get("CI"):
             # In CI a missing database is a broken pipeline, never a skip.

@@ -19,6 +19,7 @@ import argparse
 import asyncio
 import uuid
 
+from frontdesk_agent import aio
 from frontdesk_agent.config import get_settings
 from frontdesk_agent.db.models import ReviewStatus
 from frontdesk_agent.db.repositories import ReviewRepository, TenantDirectory
@@ -104,4 +105,4 @@ if __name__ == "__main__":
     parser.add_argument("--clinic", default="maple-dental")
     parser.add_argument("--phone", default="+14165550110", help="defaults to a seeded client")
     args = parser.parse_args()
-    asyncio.run(main(args.clinic, args.phone))
+    aio.run(main(args.clinic, args.phone))

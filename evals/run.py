@@ -19,7 +19,6 @@ the PR score table. Exits 1 if --gate is set and the run fails its thresholds.
 """
 
 import argparse
-import asyncio
 import json
 import os
 import subprocess
@@ -30,6 +29,7 @@ from decimal import Decimal
 from pathlib import Path
 from typing import Any
 
+from frontdesk_agent import aio
 from frontdesk_agent.config import get_settings
 from frontdesk_agent.db.session import make_engine, make_sessionmaker
 from frontdesk_agent.evaluation import database
@@ -279,7 +279,7 @@ def main() -> None:
     p.add_argument("--out", help="results file path")
     p.add_argument("--gate", action="store_true", help="exit 1 if the run fails its thresholds")
     args = p.parse_args()
-    report, results, budget = asyncio.run(main_async(args))
+    report, results, budget = aio.run(main_async(args))
     sys.exit(finish(args, report, results, budget))
 
 
