@@ -50,3 +50,19 @@ prompts.
   (a `v2`), compared against `v1` in the evals.
 - No `to_time`: the result is already sorted, and an earliest start covers
   "after 4", "at 2" and "afternoon". "Before 10" is served by the default.
+
+## Addendum: providers by name (2026-11-16)
+
+The first paid run (agent/v1, Haiku 4.5, $1.67) confirmed the model sets
+`from_time`: in every failed booking case reviewed where the client named a
+time, the call set it. It also showed a
+second gap in the same tool. In **6 of 132 cases** the model passed a
+provider's name ("Lena Park") as `provider_id`, which failed validation and
+cost a retry. Before its first availability call the model has no ids, only
+the name the client used.
+
+`provider_id` became `provider`, taking a name or an id. Every word given,
+minus titles ("Dr", "with"), must appear in exactly one active provider's
+name in this clinic; otherwise the error lists the clinic's providers so the
+model can ask. Lookup goes through the tenant-bound `ProviderRepository`, so
+another clinic's provider is unknown by name and by id (tested).

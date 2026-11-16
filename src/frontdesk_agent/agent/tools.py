@@ -92,8 +92,13 @@ class _Input(BaseModel):
 class CheckAvailabilityInput(_Input):
     # A field named "date" cannot also use the bare type name "date".
     date: dt.date = Field(description="The day to check, YYYY-MM-DD, in the clinic's timezone.")
-    provider_id: uuid.UUID | None = Field(
-        default=None, description="Only this provider. Omit to check everyone."
+    provider: str | None = Field(
+        default=None,
+        max_length=120,
+        description=(
+            "Only this provider: a name as the client said it ('Lena', 'Dr. Osei') or a"
+            " provider_id from an earlier result. Omit to check everyone."
+        ),
     )
     from_time: dt.time | None = Field(
         default=None,
@@ -150,8 +155,14 @@ async def check_availability(ctx: ToolContext, args: CheckAvailabilityInput) -> 
         return error("That date is in the past.")
     if args.date > today + timedelta(days=MAX_DAYS_AHEAD):
         return error(f"Bookings open at most {MAX_DAYS_AHEAD} days ahead.")
+    provider_id = None
+    if args.provider is not None:
+        found = await _resolve_provider(ctx, args.provider)
+        if isinstance(found, ToolOutcome):
+            return found
+        provider_id = found
     slots = await free_slots(
-        ctx.session, ctx.tenant, args.date, now=ctx.now, provider_id=args.provider_id
+        ctx.session, ctx.tenant, args.date, now=ctx.now, provider_id=provider_id
     )
     if args.from_time is not None:
         # A busy day has 40+ open slots and only MAX_SLOTS_SHOWN fit in the
@@ -174,6 +185,35 @@ async def check_availability(ctx: ToolContext, args: CheckAvailabilityInput) -> 
             "more_available": max(0, len(slots) - MAX_SLOTS_SHOWN),
         }
     )
+
+
+async def _resolve_provider(ctx: ToolContext, wanted: str) -> uuid.UUID | ToolOutcome:
+    """A provider id, or an error naming the choices.
+
+    The model knows providers by the name the client used before it has seen
+    an id, and the first paid eval run showed it passing names as ids (ADR
+    0014), so names are accepted: every word given, minus titles, must
+    appear in exactly one active provider's name.
+    """
+    providers = [
+        p for p in await ProviderRepository(ctx.session, ctx.tenant.id).list(limit=200) if p.active
+    ]
+    try:
+        as_id = uuid.UUID(wanted)
+    except ValueError:
+        words = [w for w in wanted.lower().replace(".", " ").split() if w not in _TITLES]
+        matches = [p for p in providers if words and all(w in p.name.lower() for w in words)]
+    else:
+        matches = [p for p in providers if p.id == as_id]
+    if len(matches) == 1:
+        return matches[0].id
+    names = ", ".join(sorted(p.name for p in providers))
+    if not matches:
+        return error(f"No provider matches {wanted!r}. Providers here: {names}.")
+    return error(f"{wanted!r} matches more than one provider. Providers here: {names}.")
+
+
+_TITLES = {"dr", "doctor", "with"}
 
 
 async def book_appointment(ctx: ToolContext, args: BookAppointmentInput) -> ToolOutcome:
