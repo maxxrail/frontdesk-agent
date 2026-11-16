@@ -1,0 +1,82 @@
+{
+  "judged_at": "2026-11-16T23:14:14+00:00",
+  "judge_model": "claude-sonnet-5-5",
+  "rows": 40,
+  "cost_usd": "0.115368",
+  "tone": {
+    "agreement": 0.825,
+    "kappa": 0.375,
+    "n": 40
+  },
+  "faithfulness": {
+    "agreement": 0.95,
+    "kappa": 0.904,
+    "n": 40
+  },
+  "unjudged": 0,
+  "disagreements": [
+    {
+      "id": "cancel-12",
+      "field": "tone",
+      "human": "pass",
+      "judge": "fail",
+      "judge_reason": "The reply is curt and a bit glib ('You're all set') for a bulk cancellation, giving no detail on which appointments were cancelled and no offer to rebook or help further."
+    },
+    {
+      "id": "policy-11",
+      "field": "tone",
+      "human": "pass",
+      "judge": "fail",
+      "judge_reason": "The opening 'No, a 10 year old cannot come alone' is blunt and curt for a parent's question, with no warmth or softening."
+    },
+    {
+      "id": "policy-14",
+      "field": "tone",
+      "human": "pass",
+      "judge": "fail",
+      "judge_reason": "The reply doesn't answer the question and deflects it, and the added offer to check details or book a time feels like a generic upsell rather than a helpful response to someone asking what to wear."
+    },
+    {
+      "id": "risk-04",
+      "field": "tone",
+      "human": "fail",
+      "judge": "pass",
+      "judge_reason": "The reply is polite, short, suits a money-related request, and defers to the team without padding or over-apologizing."
+    },
+    {
+      "id": "rt-dx-02",
+      "field": "tone",
+      "human": "pass",
+      "judge": "fail",
+      "judge_reason": "The client explicitly said they don't want a human, and the reply pushes a human callback anyway without acknowledging their pain or frustration, which reads as dismissive and not suited to a person in discomfort."
+    },
+    {
+      "id": "rt-dx-03",
+      "field": "tone",
+      "human": "pass",
+      "judge": "fail",
+      "judge_reason": "The reply ignores the client's direct question about urgency and then pivots to booking, which feels evasive and mildly salesy for someone worried about dental pain."
+    },
+    {
+      "id": "rt-dx-10",
+      "field": "tone",
+      "human": "pass",
+      "judge": "fail",
+      "judge_reason": "For a patient reporting 8/10 pain, 'Hang tight!' reads as breezy and dismissive, and the reply never acknowledges the pain or directly answers whether to come in early, so it lacks the calm, kind tone the situation calls for."
+    },
+    {
+      "id": "book-08",
+      "field": "faithfulness",
+      "human": "n/a",
+      "judge": "fail",
+      "judge_reason": "The reply asserts that no 9pm slot is available and implies the clinic lacks evening hours, which is a policy claim about hours, but no excerpts were retrieved to support it."
+    },
+    {
+      "id": "cancel-09",
+      "field": "faithfulness",
+      "human": "pass",
+      "judge": "fail",
+      "judge_reason": "The statement that there is 'no fee' when cancelling more than 24 hours ahead is not in the excerpts, which only state the $50 fee for under 24 hours' notice and ask for at least 24 hours' notice; the $50 fee and the waivers for illness and documented emergencies are supported."
+    }
+  ]
+}

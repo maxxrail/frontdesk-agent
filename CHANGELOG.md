@@ -14,8 +14,14 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Agent prompt `v2`, now the default: books the first free provider when the
   client has no preference, works out dates itself, offers at most three
   times. `evals/baseline.json` holds the `v1` run it is compared against.
+- Judge agreement with 40 hand labels: faithfulness 95% (kappa 0.90), tone
+  82.5% (kappa 0.38); see `evals/README.md`.
 
 ### Fixed
+
+- The eval judge (Claude Sonnet 5.5) spent its 300-token limit on thinking and
+  returned cut-off verdicts for 52 of 129 replies. It now runs with thinking
+  off, and a cut-off verdict is reported as such.
 
 - The eval leak check no longer fails a reply for repeating a name the client
   typed; a detail the client did not give still fails it.
