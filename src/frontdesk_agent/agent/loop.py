@@ -60,6 +60,19 @@ def system_prompt(ctx: ToolContext, prompt_version: str = PROMPT_VERSION) -> str
     return system
 
 
+# Appended to the system prompt in read-only mode. The prompt tells the agent
+# to call escalate_to_human for clinical and money questions, but a held
+# message is already with staff and that tool is not offered. Without this
+# note Haiku 5.5 called the missing tool in 14 of 132 eval cases and drafted
+# "I wasn't able to pass your message to the team" (ADR 0015).
+READ_ONLY_NOTE = (
+    "\n\nThis message has already been passed to the clinic team, and nothing you"
+    " write is sent until a staff member approves it. escalate_to_human is not"
+    " available and not needed. You may look things up. Write the short reply a"
+    " staff member could send; do not say you could not reach the team."
+)
+
+
 async def run_agent(
     llm: LLMClient,
     ctx: ToolContext,
@@ -77,7 +90,7 @@ async def run_agent(
     """
     allowed = {n for n, t in TOOLS.items() if t.read_only or not read_only}
     specs = [TOOLS[n].spec for n in TOOLS if n in allowed]
-    system = system_prompt(ctx, prompt_version)
+    system = system_prompt(ctx, prompt_version) + (READ_ONLY_NOTE if read_only else "")
     messages = list(history)
     run = AgentRun(reply=None, stopped="step_limit", steps=0)
     policy = retry_policy or RetryPolicy()

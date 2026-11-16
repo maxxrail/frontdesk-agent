@@ -12,7 +12,7 @@ import pytest
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from frontdesk_agent.agent.loop import MAX_STEPS
+from frontdesk_agent.agent.loop import MAX_STEPS, READ_ONLY_NOTE
 from frontdesk_agent.agent.risk import MEDICAL_HOLDING_MESSAGE
 from frontdesk_agent.db.models import (
     Appointment,
@@ -180,6 +180,9 @@ async def test_medical_question_is_held_with_a_safety_message(
     # The draft ran with read-only tools: it could not have booked or cancelled.
     assert "book_appointment" not in desk.llm.conversations[0]["tools"]  # type: ignore[operator]
     assert "search_policy" in desk.llm.conversations[0]["tools"]  # type: ignore[operator]
+    # It is told the team already has it, since escalate_to_human is not offered.
+    assert "escalate_to_human" not in desk.llm.conversations[0]["tools"]  # type: ignore[operator]
+    assert READ_ONLY_NOTE in str(desk.llm.conversations[0]["system"])
 
 
 async def test_money_question_is_held_silently(desk: Desk, world: World) -> None:

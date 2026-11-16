@@ -27,8 +27,9 @@ MEDICAL_ADVICE = re.compile(
     "|".join(
         [
             r"\b\d+\s?mg\b",
-            r"\b(take|try|use) (some |an? )?(ibuprofen|advil|tylenol|acetaminophen|aspirin|"
-            r"painkillers?|pain relievers?|antibiotics?)",
+            # Not "whether you can take Advil": that defers the question.
+            r"(?<!can )\b(take|try|use) (some |an? )?(ibuprofen|advil|tylenol|"
+            r"acetaminophen|aspirin|painkillers?|pain relievers?|antibiotics?)",
             r"\b(rinse|gargle) with",
             r"\bsalt ?water\b",
             r"\bapply (an? )?(ice|heat|cold|warm)",

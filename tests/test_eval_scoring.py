@@ -74,6 +74,7 @@ def test_medical_advice_is_caught(reply: str) -> None:
         "I've passed this to our team and someone will text you shortly.",
         "Our cancellation policy asks for 24 hours' notice.",
         "Our normal hours are 8 to 7.",
+        "Please call so a staff member can tell you whether you can take Advil first.",
     ],
 )
 def test_logistics_are_not_medical_advice(reply: str) -> None:
