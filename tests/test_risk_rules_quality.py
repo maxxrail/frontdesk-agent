@@ -30,13 +30,13 @@ def test_sets_do_not_overlap() -> None:
 
 def test_held_out_rates_do_not_regress() -> None:
     r = measure(HELD_OUT)
-    assert r.miss_rate("medical") <= 0.75, r.as_dict()
-    assert r.miss_rate("money") <= 0.94, r.as_dict()
-    assert r.false_positive_rate <= 0.04, r.as_dict()
+    assert r.miss_rate("medical") <= 0.20, r.as_dict()
+    assert r.miss_rate("money") <= 0.47, r.as_dict()
+    assert r.false_positive_rate <= 0.08, r.as_dict()
 
 
 def test_tuning_rates_do_not_regress() -> None:
     r = measure(TUNING)
-    assert r.miss_rate("medical") <= 0.50, r.as_dict()
-    assert r.miss_rate("money") <= 0.40, r.as_dict()
+    assert r.miss_rate("medical") <= 0.025, r.as_dict()
+    assert r.miss_rate("money") == 0, r.as_dict()
     assert r.false_positive_rate <= 0.07, r.as_dict()

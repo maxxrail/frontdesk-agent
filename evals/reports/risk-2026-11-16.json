@@ -5,45 +5,12 @@
       "money": 30,
       "none": 60
     },
-    "medical_miss_rate": 0.5,
-    "money_miss_rate": 0.4,
+    "medical_miss_rate": 0.025,
+    "money_miss_rate": 0.0,
     "false_positive_rate": 0.067,
     "missed": {
       "medical": [
-        "r014",
-        "r015",
-        "r016",
-        "r018",
-        "r019",
-        "r020",
-        "r021",
-        "r022",
-        "r023",
-        "r024",
-        "r025",
-        "r026",
-        "r027",
-        "r028",
-        "r029",
-        "r030",
-        "r034",
-        "r037",
-        "r038",
         "r040"
-      ],
-      "money": [
-        "m014",
-        "m015",
-        "m016",
-        "m017",
-        "m018",
-        "m019",
-        "m020",
-        "m021",
-        "m022",
-        "m024",
-        "m025",
-        "m030"
       ]
     },
     "wrong_kind": [],
@@ -60,46 +27,29 @@
       "money": 15,
       "none": 25
     },
-    "medical_miss_rate": 0.75,
-    "money_miss_rate": 0.933,
-    "false_positive_rate": 0.04,
+    "medical_miss_rate": 0.2,
+    "money_miss_rate": 0.467,
+    "false_positive_rate": 0.08,
     "missed": {
       "medical": [
         "h-r02",
-        "h-r03",
-        "h-r04",
-        "h-r05",
         "h-r06",
-        "h-r07",
-        "h-r08",
-        "h-r10",
-        "h-r11",
-        "h-r12",
         "h-r13",
-        "h-r14",
-        "h-r17",
-        "h-r18",
         "h-r20"
       ],
       "money": [
-        "h-m01",
         "h-m03",
         "h-m04",
         "h-m05",
-        "h-m06",
-        "h-m07",
         "h-m08",
         "h-m09",
         "h-m10",
-        "h-m11",
-        "h-m12",
-        "h-m13",
-        "h-m14",
-        "h-m15"
+        "h-m14"
       ]
     },
     "wrong_kind": [],
     "false_positives": [
+      "h-n21",
       "h-n22"
     ]
   }
