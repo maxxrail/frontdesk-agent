@@ -236,15 +236,23 @@ class AppointmentRepository(TenantRepository[Appointment]):
             async with self._session.begin_nested():
                 inserted = (await self._session.execute(stmt.returning(Appointment.id))).scalar()
         except IntegrityError as exc:
-            if "uq_appointments_provider_slot_booked" in str(exc.orig):
+            if "uq_appointments_provider_slot_booked" not in str(exc.orig):
+                raise
+            # ON CONFLICT covers only the key index. When two replays race,
+            # Postgres may check the slot index first and raise here even
+            # though the winner is our own replay, so look for it by key.
+            existing = (
+                await self.by_idempotency_key(idempotency_key)
+                if idempotency_key is not None
+                else None
+            )
+            if existing is None:
                 raise SlotTakenError("that slot was just booked by someone else") from exc
-            raise
-
-        if inserted is not None:
-            return BookingResult(await self.get(inserted), created=True)
-
-        assert idempotency_key is not None
-        existing = await self.by_idempotency_key(idempotency_key)
+        else:
+            if inserted is not None:
+                return BookingResult(await self.get(inserted), created=True)
+            assert idempotency_key is not None
+            existing = await self.by_idempotency_key(idempotency_key)
         if existing is None:  # pragma: no cover - the conflict implies it exists
             raise RuntimeError("idempotency conflict without an existing row")
         same = (
