@@ -38,6 +38,7 @@ from frontdesk_agent.db.repositories import (
 )
 from frontdesk_agent.frontdesk.bandit import Arm, EpsilonGreedy, response_reward
 from frontdesk_agent.frontdesk.ports import Effects
+from frontdesk_agent.timefmt import human_datetime
 
 OFFER_MINUTES = 15
 
@@ -234,4 +235,4 @@ class SlotFiller:
 
 
 def _human(when: datetime, tenant: Tenant) -> str:
-    return when.astimezone(ZoneInfo(tenant.timezone)).strftime("%A, %B %-d at %-I:%M %p")
+    return human_datetime(when.astimezone(ZoneInfo(tenant.timezone)))

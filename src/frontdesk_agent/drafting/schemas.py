@@ -8,6 +8,8 @@ from datetime import datetime
 
 from pydantic import BaseModel, Field, field_validator
 
+from frontdesk_agent.timefmt import human_datetime
+
 MAX_SMS_CHARS = 300
 
 
@@ -34,7 +36,7 @@ class ReminderRequest(BaseModel):
 
     def appointment_human(self) -> str:
         """The appointment rendered the way it should read in the message."""
-        return self.appointment_at.strftime("%A, %B %-d at %-I:%M %p")
+        return human_datetime(self.appointment_at)
 
 
 class ReminderDraft(BaseModel):

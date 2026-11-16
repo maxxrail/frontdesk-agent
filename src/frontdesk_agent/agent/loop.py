@@ -27,6 +27,7 @@ from frontdesk_agent.llm.messages import (
 from frontdesk_agent.llm.pricing import cost_usd
 from frontdesk_agent.llm.retry import RetryPolicy, with_retries
 from frontdesk_agent.prompts import load_prompt
+from frontdesk_agent.timefmt import human_datetime
 
 logger = logging.getLogger(__name__)
 
@@ -53,7 +54,7 @@ def system_prompt(ctx: ToolContext) -> str:
         business_name=ctx.tenant.name,
         business_type=ctx.tenant.business_type,
         client_label=label,
-        now_local=ctx.now.astimezone(ctx.tz).strftime("%A, %B %-d, %Y at %-I:%M %p"),
+        now_local=human_datetime(ctx.now.astimezone(ctx.tz), with_year=True),
         timezone=ctx.tenant.timezone,
     )
     return system
