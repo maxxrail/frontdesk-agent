@@ -113,7 +113,7 @@ jobs:
           from frontdesk_agent.prompts import load_prompt
           from frontdesk_agent.retrieval.embeddings import default_embedder
           load_prompt('reminder_draft', 'v1'); load_prompt('policy_answer', 'v1')
-          load_prompt('agent', 'v1')
+          load_prompt('agent', 'v1'); load_prompt('agent', 'v2')
           from frontdesk_agent.worker import WorkerSettings
           assert {f.__qualname__ for f in WorkerSettings.functions} == {
               'handle_inbound', 'start_slot_fill', 'expire_offer'}

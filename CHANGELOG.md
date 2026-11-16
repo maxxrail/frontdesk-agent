@@ -9,8 +9,16 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - `check_availability` takes an optional `from_time`, so the agent can reach
   afternoon slots past the 8 it shows (ADR 0014).
+- `check_availability` takes a provider by name (`provider`, was
+  `provider_id`), so the model does not have to guess an id (ADR 0014).
+- Agent prompt `v2`, now the default: books the first free provider when the
+  client has no preference, works out dates itself, offers at most three
+  times. `evals/baseline.json` holds the `v1` run it is compared against.
 
 ### Fixed
+
+- The eval leak check no longer fails a reply for repeating a name the client
+  typed; a detail the client did not give still fails it.
 
 - Two idempotent booking replays racing each other could get `SlotTakenError`
   instead of the original booking.
