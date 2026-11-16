@@ -34,7 +34,7 @@ from frontdesk_agent.retrieval.embeddings import default_embedder
 class ToolReadingFake:
     """Books "tomorrow at 2" by reading check_availability's real result.
 
-    Turn 1: check Tuesday. Turn 2: book the 14:00 slot it returned (or say
+    Turn 1: check Tuesday from 14:00. Turn 2: book the 14:00 slot it returned (or say
     there is none). Turn 3: confirm. Anything else: a canned reply, optionally
     leaking ``leak`` to prove the leak check sees it."""
 
@@ -60,7 +60,7 @@ class ToolReadingFake:
         text = "tomorrow at 2" in str(messages[-1].content).lower()
         blocks: list[Block]
         if isinstance(last, TextBlock) and text:
-            blocks = [call("check_availability", date="2030-01-08")]
+            blocks = [call("check_availability", date="2030-01-08", from_time="14:00")]
         elif isinstance(last, ToolResultBlock) and '"open_slots"' in last.content:
             slots = [
                 s for s in json.loads(last.content)["open_slots"] if "T14:00" in s["starts_at"]

@@ -5,6 +5,18 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+
+- `check_availability` takes an optional `from_time`, so the agent can reach
+  afternoon slots past the 8 it shows (ADR 0014).
+
+### Fixed
+
+- Two idempotent booking replays racing each other could get `SlotTakenError`
+  instead of the original booking.
+- Migrations, scripts and DB tests run on Windows (psycopg needs a selector
+  event loop there).
+
 ## [0.4.0] - 2026-11-14
 
 ### Added

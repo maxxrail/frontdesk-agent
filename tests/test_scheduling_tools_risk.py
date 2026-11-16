@@ -98,6 +98,22 @@ async def test_bad_inputs_are_errors_the_model_can_fix(ctx: ToolContext) -> None
     assert out.is_error
 
 
+async def test_from_time_reaches_slots_past_the_first_page(ctx: ToolContext) -> None:
+    """A full day has more slots than the result shows; from_time reaches the afternoon."""
+    body, err = await run(ctx, "check_availability", date="2030-01-08")
+    shown = [str(s["starts_at"])[11:16] for s in body["open_slots"]]  # type: ignore[attr-defined]
+    assert not err and shown[0] == "09:00" and "14:00" not in shown
+    assert body["more_available"] == 8  # 16 half-hour slots from 9 to 5, 8 shown
+
+    body, err = await run(ctx, "check_availability", date="2030-01-08", from_time="14:00")
+    shown = [str(s["starts_at"])[11:16] for s in body["open_slots"]]  # type: ignore[attr-defined]
+    assert not err and shown == ["14:00", "14:30", "15:00", "15:30", "16:00", "16:30"]
+    assert body["more_available"] == 0
+
+    body, err = await run(ctx, "check_availability", date="2030-01-08", from_time="2pm")
+    assert err and "from_time" in str(body["error"])
+
+
 async def test_booking_only_scheduled_open_slots(ctx: ToolContext, world: World) -> None:
     pid = str(world.provider_id)
     body, err = await run(ctx, "book_appointment", provider_id=pid, starts_at=local("10:15"))

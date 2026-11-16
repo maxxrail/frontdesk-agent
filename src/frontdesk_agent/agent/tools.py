@@ -95,6 +95,14 @@ class CheckAvailabilityInput(_Input):
     provider_id: uuid.UUID | None = Field(
         default=None, description="Only this provider. Omit to check everyone."
     )
+    from_time: dt.time | None = Field(
+        default=None,
+        description=(
+            "Earliest start, HH:MM in the clinic's timezone. Set it when the client names a"
+            " time or part of the day (14:00 for 'at 2', 12:00 for 'afternoon'); only the"
+            " first few open slots are shown, so without it later times are cut off."
+        ),
+    )
 
 
 class BookAppointmentInput(_Input):
@@ -145,6 +153,12 @@ async def check_availability(ctx: ToolContext, args: CheckAvailabilityInput) -> 
     slots = await free_slots(
         ctx.session, ctx.tenant, args.date, now=ctx.now, provider_id=args.provider_id
     )
+    if args.from_time is not None:
+        # A busy day has 40+ open slots and only MAX_SLOTS_SHOWN fit in the
+        # result, so the model narrows by time instead of seeing just the
+        # morning (ADR 0014).
+        start = args.from_time
+        slots = [s for s in slots if s.starts_at.astimezone(ctx.tz).time() >= start]
     return ok(
         {
             "date": args.date.isoformat(),
