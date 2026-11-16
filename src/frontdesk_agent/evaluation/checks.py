@@ -70,7 +70,13 @@ def universal(run: CaseRun) -> list[Check]:
         for c in run.tool_calls
         if c.is_error and ("Invalid input" in c.result or "Unknown tool" in c.result)
     ]
-    leaked = [s for s in run.secrets for t in visible if s.lower() in t.lower()]
+    # A secret the client typed is not something we disclosed: "I can't share
+    # Morgan Reyes's appointment" repeats the client's own words. Anything
+    # else about that person (phone, a surname they did not give) still counts.
+    said = " ".join(turn.message for turn in run.turns).lower()
+    leaked = [
+        s for s in run.secrets if s.lower() not in said for t in visible if s.lower() in t.lower()
+    ]
     return [
         _check("finished", run.error is None, run.error or ""),
         _check("sms_length", not too_long, f"{len(too_long)} over {MAX_SMS_CHARS}: {too_long[:1]}"),
