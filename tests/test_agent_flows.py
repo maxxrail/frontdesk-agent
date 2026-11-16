@@ -29,6 +29,7 @@ from frontdesk_agent.db.models import (
 from frontdesk_agent.db.repositories import AppointmentRepository
 from frontdesk_agent.frontdesk.ports import Effects
 from frontdesk_agent.llm.fake import call, loop_turn, say
+from frontdesk_agent.prompts import PromptError
 from tests.desk import CLIENT_PHONE, NOW, Desk, World, local, make_desk, make_world, text
 
 
@@ -262,3 +263,18 @@ async def test_a_failed_send_is_logged_not_lost(
         desk, select(func.count()).where(SmsMessage.status == MessageStatus.FAILED)
     )
     assert failed == 1
+
+
+async def test_prompt_version_setting_reaches_the_model_and_the_record(
+    desk: Desk, world: World
+) -> None:
+    """Evals compare prompt versions; the version must be the one that ran."""
+    desk.services.frontdesk.prompt_version = "v1"
+    desk.llm.script(say("Hi Dana, how can I help?"))
+    assert await text(desk, world, "hi") == "agent_reply"
+    recorded = await scalar(desk, select(LLMCall.prompt_version))
+    assert recorded == "v1"
+
+    desk.services.frontdesk.prompt_version = "v999"
+    with pytest.raises(PromptError):  # a missing version fails loudly, never falls back
+        await text(desk, world, "hello again")

@@ -32,7 +32,7 @@ from frontdesk_agent.timefmt import human_datetime
 logger = logging.getLogger(__name__)
 
 PROMPT_NAME = "agent"
-PROMPT_VERSION = "v1"
+PROMPT_VERSION = "v1"  # the default; Settings.agent_prompt_version overrides it
 MAX_STEPS = 6
 
 StopReason = Literal["reply", "step_limit"]
@@ -47,10 +47,10 @@ class AgentRun:
     tool_calls: list[str] = field(default_factory=list)
 
 
-def system_prompt(ctx: ToolContext) -> str:
+def system_prompt(ctx: ToolContext, prompt_version: str = PROMPT_VERSION) -> str:
     c = ctx.client
     label = f"{c.first_name} {c.last_name}".strip() or "a new client with no name on file"
-    system, _ = load_prompt(PROMPT_NAME, PROMPT_VERSION).render(
+    system, _ = load_prompt(PROMPT_NAME, prompt_version).render(
         business_name=ctx.tenant.name,
         business_type=ctx.tenant.business_type,
         client_label=label,
@@ -68,6 +68,7 @@ async def run_agent(
     read_only: bool = False,
     max_steps: int = MAX_STEPS,
     retry_policy: RetryPolicy | None = None,
+    prompt_version: str = PROMPT_VERSION,
 ) -> AgentRun:
     """Run the loop on ``history`` (which must end with the client's message).
 
@@ -76,7 +77,7 @@ async def run_agent(
     """
     allowed = {n for n, t in TOOLS.items() if t.read_only or not read_only}
     specs = [TOOLS[n].spec for n in TOOLS if n in allowed]
-    system = system_prompt(ctx)
+    system = system_prompt(ctx, prompt_version)
     messages = list(history)
     run = AgentRun(reply=None, stopped="step_limit", steps=0)
     policy = retry_policy or RetryPolicy()
@@ -90,7 +91,7 @@ async def run_agent(
                 messages=messages,
                 tools=specs,
                 prompt_name=PROMPT_NAME,
-                prompt_version=PROMPT_VERSION,
+                prompt_version=prompt_version,
                 max_tokens=600,
             )
 
