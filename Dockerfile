@@ -19,13 +19,23 @@ FROM python:3.12-slim AS runtime
 
 ENV PATH="/opt/venv/bin:$PATH" \
     PYTHONUNBUFFERED=1 \
-    PYTHONDONTWRITEBYTECODE=1
+    PYTHONDONTWRITEBYTECODE=1 \
+    FDA_PROMPTS_DIR=/app/prompts
 
 # Run as a non-root user: a container that is compromised should not be root.
 RUN useradd --create-home --uid 10001 appuser
 COPY --from=builder /opt/venv /opt/venv
 
 WORKDIR /app
+# Migrations ship in the image so the same artifact that serves traffic can
+# migrate the database it serves (compose's migrate service, Module 8's deploy).
+COPY --chown=appuser alembic.ini ./
+COPY --chown=appuser migrations ./migrations
+# Prompts are read at runtime; policies and scripts let the same image ingest
+# documents: docker compose run --rm api python scripts/ingest_policies.py
+COPY --chown=appuser prompts ./prompts
+COPY --chown=appuser data ./data
+COPY --chown=appuser scripts ./scripts
 USER appuser
 
 EXPOSE 8000

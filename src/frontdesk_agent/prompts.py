@@ -5,12 +5,17 @@ sections: `# System` and `# User`. Keeping them on disk means a prompt change
 shows up as a reviewable diff.
 """
 
+import os
 import re
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
 
-PROMPTS_DIR = Path(__file__).resolve().parents[2] / "prompts"
+# In a source checkout, prompts sit at the repo root. An installed package (the
+# Docker image) has no repo root, so the image sets FDA_PROMPTS_DIR instead.
+PROMPTS_DIR = Path(
+    os.environ.get("FDA_PROMPTS_DIR") or Path(__file__).resolve().parents[2] / "prompts"
+)
 
 _PLACEHOLDER = re.compile(r"\{\{(\w+)\}\}")
 _FRONT_MATTER = re.compile(r"\A---\n.*?\n---\n", re.DOTALL)

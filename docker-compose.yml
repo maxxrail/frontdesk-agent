@@ -4,14 +4,54 @@ services:
     build: .
     ports:
       - "8000:8000"
-    environment:
+    environment: &app-env
       FDA_ENV: local
+      FDA_DATABASE_URL: postgresql+psycopg://frontdesk:frontdesk@db:5432/frontdesk
+      FDA_JOB_QUEUE: redis
+      FDA_REDIS_URL: redis://redis:6379/0
+    env_file:
+      - path: .env
+        required: false
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+
+  # Runs agent turns, slot fills and offer expiries from the Redis queue.
+  worker:
+    build: .
+    command: ["arq", "frontdesk_agent.worker.WorkerSettings"]
+    environment: *app-env
+    env_file:
+      - path: .env
+        required: false
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # One-shot: applies migrations, then exits. The api waits for it to succeed.
+  migrate:
+    build: .
+    command: ["alembic", "upgrade", "head"]
+    environment:
       FDA_DATABASE_URL: postgresql+psycopg://frontdesk:frontdesk@db:5432/frontdesk
     depends_on:
       db:
         condition: service_healthy
 
-  # Postgres is here from day one so Module 2 needs no compose changes.
   # pgvector/pgvector ships the extension Module 3 needs for retrieval.
   db:
     image: pgvector/pgvector:pg16
