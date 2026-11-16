@@ -1,0 +1,60 @@
+{"id": "h-r01", "label": "medical", "text": "my gums keep bleeding when I brush, should I be worried"}
+{"id": "h-r02", "label": "medical", "text": "the area where you pulled my tooth smells really bad"}
+{"id": "h-r03", "label": "medical", "text": "can i eat solid food yet after the implant"}
+{"id": "h-r04", "label": "medical", "text": "my hip hurts more than before I started physio"}
+{"id": "h-r05", "label": "medical", "text": "i think i have dry socket"}
+{"id": "h-r06", "label": "medical", "text": "my cheek is puffy and warm to touch"}
+{"id": "h-r07", "label": "medical", "text": "what can I take for the pain tonight"}
+{"id": "h-r08", "label": "medical", "text": "I'm diabetic, is the procedure safe for me?"}
+{"id": "h-r09", "label": "medical", "text": "sharp pain in my lower back when I bend"}
+{"id": "h-r10", "label": "medical", "text": "I fainted after the injection yesterday"}
+{"id": "h-r11", "label": "medical", "text": "my filling fell out and it aches"}
+{"id": "h-r12", "label": "medical", "text": "there's a lump under my tongue"}
+{"id": "h-r13", "label": "medical", "text": "is my headache from the jaw treatment?"}
+{"id": "h-r14", "label": "medical", "text": "Should I keep doing the stretches with this much pain"}
+{"id": "h-r15", "label": "medical", "text": "my knee is swollen again after the session"}
+{"id": "h-r16", "label": "medical", "text": "the numbness in my chin hasn't gone away after 3 days"}
+{"id": "h-r17", "label": "medical", "text": "can I take my anxiety meds before sedation"}
+{"id": "h-r18", "label": "medical", "text": "my tooth got knocked out playing hockey"}
+{"id": "h-r19", "label": "medical", "text": "my toddler bit through his lip and it's bleeding a lot"}
+{"id": "h-r20", "label": "medical", "text": "the tens machine left a burn on my skin"}
+{"id": "h-m01", "label": "money", "text": "why was I charged a no show fee, I cancelled online"}
+{"id": "h-m02", "label": "money", "text": "please refund the extra $40"}
+{"id": "h-m03", "label": "money", "text": "the insurance portion was never deducted from my bill"}
+{"id": "h-m04", "label": "money", "text": "I want my deposit returned"}
+{"id": "h-m05", "label": "money", "text": "there's a mistake on my invoice"}
+{"id": "h-m06", "label": "money", "text": "I can't afford the full amount this month, can we split it"}
+{"id": "h-m07", "label": "money", "text": "you charged my card without asking"}
+{"id": "h-m08", "label": "money", "text": "I'm not paying that cancellation fee"}
+{"id": "h-m09", "label": "money", "text": "the price went up since my quote, I expect the old price"}
+{"id": "h-m10", "label": "money", "text": "what do I still owe after insurance"}
+{"id": "h-m11", "label": "money", "text": "my visa was charged $200 by mistake"}
+{"id": "h-m12", "label": "money", "text": "I got charged for two sessions but only went to one"}
+{"id": "h-m13", "label": "money", "text": "can you give me my money back"}
+{"id": "h-m14", "label": "money", "text": "My direct billing claim got rejected, now what do I pay?"}
+{"id": "h-m15", "label": "money", "text": "please take the late fee off my account"}
+{"id": "h-n01", "label": "none", "text": "can I get in sometime next week for a checkup"}
+{"id": "h-n02", "label": "none", "text": "what are your saturday hours"}
+{"id": "h-n03", "label": "none", "text": "how much for a massage"}
+{"id": "h-n04", "label": "none", "text": "can I pay with debit"}
+{"id": "h-n05", "label": "none", "text": "please cancel my appointment next month"}
+{"id": "h-n06", "label": "none", "text": "is there a bus stop near you"}
+{"id": "h-n07", "label": "none", "text": "do you charge a fee for missed appointments"}
+{"id": "h-n08", "label": "none", "text": "do you bill blue cross directly"}
+{"id": "h-n09", "label": "none", "text": "could I switch to a morning slot"}
+{"id": "h-n10", "label": "none", "text": "great thank you"}
+{"id": "h-n11", "label": "none", "text": "how much is a filling"}
+{"id": "h-n12", "label": "none", "text": "can I book physio for my sore shoulder", "note": "symptom word, booking only"}
+{"id": "h-n13", "label": "none", "text": "my name is Sam Ortiz"}
+{"id": "h-n14", "label": "none", "text": "is Priya in on Thursday"}
+{"id": "h-n15", "label": "none", "text": "do I need to fill forms before my first visit"}
+{"id": "h-n16", "label": "none", "text": "do you treat sports injuries", "note": "service question"}
+{"id": "h-n17", "label": "none", "text": "can I book an appointment for my back", "note": "body part, booking only"}
+{"id": "h-n18", "label": "none", "text": "how long does whitening take"}
+{"id": "h-n19", "label": "none", "text": "is there an elevator"}
+{"id": "h-n20", "label": "none", "text": "the 10am is perfect"}
+{"id": "h-n21", "label": "none", "text": "do you offer payment plans", "note": "policy question"}
+{"id": "h-n22", "label": "none", "text": "what is your refund policy for products", "note": "policy question, not a refund request"}
+{"id": "h-n23", "label": "none", "text": "running late, be there in 5"}
+{"id": "h-n24", "label": "none", "text": "what time is my appointment tomorrow"}
+{"id": "h-n25", "label": "none", "text": "do you have evening appointments"}

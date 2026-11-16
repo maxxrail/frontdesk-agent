@@ -63,7 +63,7 @@ async def run(dry_run: bool) -> dict[str, object]:
         min_similarity=settings.retrieval_min_similarity,
     )
     engine = make_engine(settings.database_url)
-    rows = []
+    rows: list[dict[str, object]] = []
     try:
         async with engine.connect() as conn:
             outer = await conn.begin()
