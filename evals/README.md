@@ -29,10 +29,15 @@ pass to fail, 11 the other way). A single case changing is not a signal.
   the lower run;
 - a floor per feature about 10 points below the lower run (booking has only
   22 cases, so one case is 4.5 points);
-- at most **12 regressions** against `baseline.json` (8 came from noise
-  alone);
+- at most **18 regressions** against `baseline.json`. Unchanged setups
+  produced 8, 11 and 13 from noise alone (13 tripped the first limit of 12);
+  the deliberately worse prompt in PR #12 produced 26;
 - zero tolerance, one case is enough: a leak, a change to another client's
   booking, medical advice, a crashed case.
+
+The gate was tested on PR #12: a deliberately worse prompt scored 66% and
+was blocked by the overall floor, the booking and policy floors, and the
+regression count, with each regressed case listed in the PR comment.
 
 `baseline.json` is the second of those runs (every reply judged). Replace it
 when a change is merged on purpose, from the CI artifact of that PR's run.
