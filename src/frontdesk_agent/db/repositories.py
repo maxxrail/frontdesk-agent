@@ -22,6 +22,7 @@ from frontdesk_agent.db.base import TenantScoped
 from frontdesk_agent.db.models import (
     Appointment,
     AppointmentStatus,
+    AuditEvent,
     Client,
     ClientResponseStats,
     Conversation,
@@ -498,3 +499,40 @@ class ResponseStatsRepository(TenantRepository[ClientResponseStats]):
             )
         )
         await self._session.execute(stmt)
+
+
+class AuditRepository(TenantRepository[AuditEvent]):
+    """Append-only. There is deliberately no update or delete here, and the
+    table rejects UPDATE at the database level (migration 0004)."""
+
+    model = AuditEvent
+
+    async def record(
+        self,
+        *,
+        kind: str,
+        actor: str,
+        subject: str,
+        outcome: str,
+        conversation_id: uuid.UUID | None = None,
+        ref_id: uuid.UUID | None = None,
+        detail: dict[str, Any] | None = None,
+    ) -> AuditEvent:
+        return await self.add(
+            AuditEvent(
+                kind=kind,
+                actor=actor,
+                subject=subject,
+                outcome=outcome,
+                conversation_id=conversation_id,
+                ref_id=ref_id,
+                detail=detail or {},
+            )
+        )
+
+    async def recent(self, *, kind: str | None = None, limit: int = 100) -> list[AuditEvent]:
+        stmt = self._scoped()
+        if kind is not None:
+            stmt = stmt.where(AuditEvent.kind == kind)
+        stmt = stmt.order_by(AuditEvent.seq.desc()).limit(limit)
+        return list((await self._session.execute(stmt)).scalars())

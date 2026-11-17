@@ -40,6 +40,7 @@ from frontdesk_agent.db.models import (
 )
 from frontdesk_agent.db.repositories import (
     AppointmentRepository,
+    AuditRepository,
     ClientRepository,
     ConversationRepository,
     NotFoundError,
@@ -202,6 +203,19 @@ class FrontDesk:
         item.final_reply = text or None
         item.decided_by = reviewer
         item.decided_at = now
+        await AuditRepository(session, tenant.id).record(
+            kind="review_decision",
+            actor=reviewer[:120],
+            subject=item.kind.value,
+            outcome=item.status.value,
+            conversation_id=convo.id,
+            ref_id=item.id,
+            detail={
+                "action": (item.action or {}).get("type"),
+                "reply_edited": reply is not None and reply.strip() != (item.proposed_reply or ""),
+                "replied": bool(text),
+            },
+        )
 
         transcript = [Message.from_json(m) for m in convo.transcript]
         transcript = _append(transcript, Message.user_text(note))

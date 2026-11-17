@@ -43,6 +43,7 @@ def test_schema_has_the_expected_tables() -> None:
         "appointments",
         "waitlist_entries",
         "llm_calls",
+        "audit_events",
         "policy_documents",
         "policy_chunks",
         "provider_schedules",

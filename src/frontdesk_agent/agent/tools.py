@@ -30,6 +30,7 @@ from frontdesk_agent.agent.scheduling import find_slot, free_slots
 from frontdesk_agent.db.models import Appointment, Client, Conversation, ReviewKind, Tenant
 from frontdesk_agent.db.repositories import (
     AppointmentRepository,
+    AuditRepository,
     NotFoundError,
     ProviderRepository,
     SlotTakenError,
@@ -401,6 +402,35 @@ TOOLS: dict[str, Tool] = {
 
 
 async def execute(
+    ctx: ToolContext, name: str, raw: dict[str, Any], allowed: set[str]
+) -> ToolOutcome:
+    """Run one tool call and record it in the audit trail, whatever happens:
+    a tool the model was not offered, invalid input, a business error, a
+    held action, or success."""
+    held_before = len(ctx.held)
+    outcome = await _execute(ctx, name, raw, allowed)
+    if outcome.is_error:
+        rejected = outcome.content.startswith(
+            ('{"error": "Unknown tool', '{"error": "Invalid input')
+        )
+        status = "rejected" if rejected else "error"
+    else:
+        status = "held" if len(ctx.held) > held_before else "ok"
+    detail: dict[str, Any] = {"input": raw}
+    if outcome.is_error:
+        detail["error"] = outcome.content[:300]
+    await AuditRepository(ctx.session, ctx.tenant.id).record(
+        kind="tool_call",
+        actor="agent",
+        subject=name[:80],
+        outcome=status,
+        conversation_id=ctx.conversation.id,
+        detail=detail,
+    )
+    return outcome
+
+
+async def _execute(
     ctx: ToolContext, name: str, raw: dict[str, Any], allowed: set[str]
 ) -> ToolOutcome:
     tool = TOOLS.get(name)
