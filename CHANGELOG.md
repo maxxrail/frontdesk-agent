@@ -5,29 +5,54 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-11-16
+
+Module 5: evals that gate pull requests.
+
 ### Added
 
-- `check_availability` takes an optional `from_time`, so the agent can reach
-  afternoon slots past the 8 it shows (ADR 0014).
-- `check_availability` takes a provider by name (`provider`, was
-  `provider_id`), so the model does not have to guess an id (ADR 0014).
-- Agent prompt `v2`, now the default: books the first free provider when the
-  client has no preference, works out dates itself, offers at most three
-  times. `evals/baseline.json` holds the `v1` run it is compared against.
+- `evals/run.py`, the eval suite, sending each case through the production
+  inbound path against a fresh clinic in its own database: deterministic
+  checks, an LLM judge for tone and faithfulness (`prompts/judge/v1`), 30
+  simulated multi-turn conversations (`prompts/client_sim/v1`), and the
+  Module 3 policy-answer eval. One budget caps every model call in a run
+  ($3 default); a full run costs about $1.40-1.70.
+- 132 cases tagged by feature and difficulty, 40 of them red team
+  (injection, other clients' data, another clinic, diagnosis pressure), plus
+  30 scenarios; with the 60 policy questions, 192 cases.
+- A CI job (`.github/workflows/evals.yml`) that runs the suite when the
+  prompts, agent, model setting or evals change, posts a score table on the
+  PR, and fails below thresholds set from measured run-to-run noise
+  (`evals/thresholds.json`, `evals/README.md`). Tested on PR #12: a
+  deliberately worse prompt was blocked at 66% with 26 regressions listed.
+- Risk rules measured on 130 tuning and 60 held-out labelled messages; on
+  the held-out set, missed medical messages fell from 75% to 20% and missed
+  money messages from 93% to 47% (false positives 4% to 8%).
 - Judge agreement with 40 hand labels: faithfulness 95% (kappa 0.90), tone
-  82.5% (kappa 0.38); see `evals/README.md`.
+  82.5% (kappa 0.38); tone is reported as a trend, not gated.
+- Agent prompt `v2`, now the default (`FDA_AGENT_PROMPT_VERSION`): books the
+  first free provider when the client has no preference, works out dates
+  itself, offers at most three times. Booking cases went from 36% to 46-64%.
+- `check_availability` takes an optional `from_time` and a provider by name
+  (ADR 0014): the 8 slots it shows covered only the first two hours of a
+  day, and 14 of 18 expected bookings were later than that.
+- `llm/thinking.py`: extended thinking is off for every model call, in each
+  model's own form, since thinking counts against `max_tokens`.
+- ADR 0015 (proposed): the agent stays on Claude Haiku 4.5 for now; Haiku
+  5.5 ties on pass rate at 1/8 of the cost but writes replies over the SMS
+  limit and leaked its reasoning into one draft.
 
 ### Fixed
 
-- The eval judge (Claude Sonnet 5.5) spent its 300-token limit on thinking and
-  returned cut-off verdicts for 52 of 129 replies. It now runs with thinking
-  off, and a cut-off verdict is reported as such.
-
-- The eval leak check no longer fails a reply for repeating a name the client
-  typed; a detail the client did not give still fails it.
-
-- Two idempotent booking replays racing each other could get `SlotTakenError`
-  instead of the original booking.
+- Two idempotent booking replays racing each other could get
+  `SlotTakenError` instead of the original booking.
+- A held message's draft is told the team already has it; the prompt said
+  to call `escalate_to_human`, which read-only mode does not offer.
+- The eval judge and client simulator spent their token limits on thinking
+  (52 of 129 verdicts cut off; simulated conversations ended early).
+- The leak check no longer fails a reply for repeating a name the client
+  typed; the medical-advice check no longer matches "whether you can take
+  Advil".
 - Migrations, scripts and DB tests run on Windows (psycopg needs a selector
   event loop there).
 

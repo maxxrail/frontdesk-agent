@@ -133,7 +133,15 @@ keywords, use Advanced Opt-Out on a Messaging Service.
 uv run python evals/retrieval.py               # chunkers x search modes -> evals/reports/
 uv run python evals/policy_answers.py --dry-run   # free; estimates a real run's cost
 uv run python evals/policy_answers.py             # real model, ~60 calls, a few cents
+uv run python evals/risk_rules.py                 # free; risk rules on labelled messages
+uv run python evals/run.py --dry-run              # free; the eval suite with a canned model
+uv run python evals/run.py                        # real model, ~$1.50, capped at $3
 ```
+
+The eval suite also runs in CI on pull requests that touch the prompts, the
+agent or the model setting, and blocks a merge that scores below the
+thresholds. See [`evals/README.md`](evals/README.md) for what it measures,
+how noisy one run is, and how far to trust the judge.
 
 ## Development
 
@@ -203,7 +211,7 @@ docs/adr/            architecture decision records
 | 2 | Postgres, migrations, tenant isolation ✅ | v0.2 |
 | 3 | Policy retrieval with pgvector, measured ✅ | v0.3 |
 | 4 | Agent with tools, SMS channel, review queue ✅ | v0.4 |
-| 5 | Eval suite gating pull requests | v0.5 |
+| 5 | Eval suite gating pull requests ✅ | v0.5 |
 | 6 | Guardrails, auth, redaction, threat model | v0.6 |
 | 7 | Tracing, metrics, cost and latency dashboards | v0.7 |
 | 8 | AWS deploy with Terraform and continuous delivery | v1.0 |

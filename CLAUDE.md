@@ -4,7 +4,7 @@ A multi-tenant LLM agent that runs the front office of appointment businesses
 over SMS: answers policy questions from each clinic's own documents, books and
 cancels, fills cancelled slots from a waitlist, and routes risky actions to a
 human review queue. It is Maxx's portfolio project for AI engineering roles,
-built as a 10-module course. Modules 0 to 4 are done. The plan for 5 to 9 is
+built as a 10-module course. Modules 0 to 5 are done. The plan for 6 to 9 is
 in `docs/roadmap.md`; read it before starting module work.
 
 ## Commands
@@ -80,7 +80,7 @@ src/frontdesk_agent/
   worker.py       arq worker
 prompts/<name>/vN.md   versioned prompts; new behaviour = new version file
 evals/            golden sets, eval scripts, reports
-docs/adr/         decisions 0001-0014; read the relevant ones before changing an area
+docs/adr/         decisions 0001-0015; read the relevant ones before changing an area
 ```
 
 ## Style

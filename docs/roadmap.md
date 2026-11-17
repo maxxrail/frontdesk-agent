@@ -1,9 +1,11 @@
 # Roadmap: modules 5 to 9
 
-Modules 0 to 4 are complete (v0.4.0, 161 tests). Each module below ends with a
+Modules 0 to 5 are complete (v0.5.0, 379 tests). Each module below ends with a
 merged PR and a tag. "Needs Maxx" lists what an agent cannot do alone.
 
-## Module 5: Evals that gate pull requests (v0.5)
+## Module 5: Evals that gate pull requests (v0.5) ✅
+
+Done in v0.5.0 (PR #4). Results: `evals/README.md`; open follow-ups: issues #5-#11.
 
 No prompt or model change merges without a measured effect.
 
