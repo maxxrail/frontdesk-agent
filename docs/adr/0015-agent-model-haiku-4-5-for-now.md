@@ -1,6 +1,6 @@
 # 15. The agent stays on Claude Haiku 4.5 for now
 
-- Status: proposed (Maxx decides)
+- Status: accepted (Maxx, 2026-11-16)
 - Date: 2026-11-16
 
 ## Context

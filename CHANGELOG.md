@@ -38,7 +38,7 @@ Module 5: evals that gate pull requests.
   day, and 14 of 18 expected bookings were later than that.
 - `llm/thinking.py`: extended thinking is off for every model call, in each
   model's own form, since thinking counts against `max_tokens`.
-- ADR 0015 (proposed): the agent stays on Claude Haiku 4.5 for now; Haiku
+- ADR 0015: the agent stays on Claude Haiku 4.5 for now; Haiku
   5.5 ties on pass rate at 1/8 of the cost but writes replies over the SMS
   limit and leaked its reasoning into one draft.
 
