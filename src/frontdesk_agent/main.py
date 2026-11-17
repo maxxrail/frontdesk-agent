@@ -20,6 +20,7 @@ from frontdesk_agent.config import get_settings
 from frontdesk_agent.db.session import make_engine, make_sessionmaker
 from frontdesk_agent.dependencies import LazyLLMClient
 from frontdesk_agent.llm.base import LLMConfigurationError
+from frontdesk_agent.logsetup import configure_logging
 from frontdesk_agent.services import ArqQueue, build_services
 
 
@@ -30,6 +31,7 @@ def create_app(database_url: str | None = None) -> FastAPI:
     fresh app with different settings instead of sharing global state.
     """
     url = database_url or get_settings().database_url
+    configure_logging(get_settings().log_level)
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:

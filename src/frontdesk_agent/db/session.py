@@ -18,8 +18,10 @@ from sqlalchemy.ext.asyncio import (
 
 def make_engine(database_url: str) -> AsyncEngine:
     # pool_pre_ping drops dead connections after a database restart instead of
-    # failing the first request that draws one.
-    return create_async_engine(database_url, pool_pre_ping=True)
+    # failing the first request that draws one. hide_parameters keeps query
+    # values (names, phone numbers, message text) out of database errors, which
+    # would otherwise reach the logs in tracebacks.
+    return create_async_engine(database_url, pool_pre_ping=True, hide_parameters=True)
 
 
 def make_sessionmaker(engine: AsyncEngine) -> async_sessionmaker[AsyncSession]:

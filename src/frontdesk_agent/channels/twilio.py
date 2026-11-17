@@ -40,5 +40,5 @@ class ConsoleSender:
 
     async def send(self, *, to: str, from_: str, body: str) -> str:
         print(f"\n[SMS {from_} -> {to}]\n{body}\n", flush=True)
-        logger.info("console sms", extra={"to": to})
+        logger.info("console sms", extra={"chars": len(body)})
         return "console"
