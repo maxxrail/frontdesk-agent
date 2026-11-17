@@ -15,6 +15,7 @@ from frontdesk_agent.db.repositories import (
     SlotTakenError,
 )
 from frontdesk_agent.db.session import make_engine, make_sessionmaker
+from tests.conftest import act_as
 from tests.factories import HALF_HOUR, SLOT, make_client, make_provider, make_tenant
 
 
@@ -158,16 +159,17 @@ async def test_concurrent_replays_race_safely(
 
 
 async def test_api_replay_returns_200_with_the_same_booking(
-    api: httpx.AsyncClient, setup: tuple[Tenant, Client, Provider]
+    api: httpx.AsyncClient, session: AsyncSession, setup: tuple[Tenant, Client, Provider]
 ) -> None:
     tenant, client, provider = setup
+    await act_as(api, session, tenant.id)
     body = {
         "client_id": str(client.id),
         "provider_id": str(provider.id),
         "starts_at": SLOT.isoformat(),
         "ends_at": (SLOT + HALF_HOUR).isoformat(),
     }
-    url = f"/v1/tenants/{tenant.id}/appointments"
+    url = "/v1/appointments"
     headers = {"Idempotency-Key": "twilio-SM123"}
 
     first = await api.post(url, json=body, headers=headers)

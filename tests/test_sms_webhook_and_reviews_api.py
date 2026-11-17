@@ -13,10 +13,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from twilio.request_validator import RequestValidator
 
 from frontdesk_agent.config import get_settings
-from frontdesk_agent.db.models import ReviewItem, SmsMessage
+from frontdesk_agent.db.models import ReviewItem, Role, SmsMessage
 from frontdesk_agent.dependencies import get_services
 from frontdesk_agent.llm.fake import loop_turn, say
 from frontdesk_agent.main import create_app
+from tests.conftest import act_as
 from tests.desk import CLIENT_PHONE, CLINIC_NUMBER, Desk, World, make_desk, make_world, text
 
 TOKEN = "test-auth-token-0123456789abcdef"
@@ -126,40 +127,41 @@ async def test_no_auth_token_refuses_everything(
 
 
 async def test_review_api_list_edit_approve_and_conflicts(
-    http: httpx.AsyncClient, desk: Desk, world: World
+    http: httpx.AsyncClient, desk: Desk, world: World, session: AsyncSession
 ) -> None:
     desk.llm.script(say("Sure, I'll refund you right away!"))
     await text(desk, world, "can I get a refund for last week")
-    base = f"/v1/tenants/{world.tenant_id}/reviews"
+    await act_as(http, session, world.tenant_id, Role.REVIEWER)
+    base = "/v1/reviews"
 
     [item] = (await http.get(base)).json()
     assert item["kind"] == "money" and item["proposed_reply"].startswith("Sure")
     assert (await http.get(f"{base}?status=approved")).json() == []
 
     edited = "Refunds are handled by our office manager; she will call you today."
-    r = await http.post(f"{base}/{item['id']}/approve", json={"reviewer": "sam", "reply": edited})
+    r = await http.post(f"{base}/{item['id']}/approve", json={"reply": edited})
     assert r.status_code == 200 and r.json()["final_reply"] == edited
+    assert r.json()["decided_by"] == "key:test-reviewer"  # from the credential, not the body
     assert desk.sender.bodies() == [edited]  # the edit was sent, not the draft
 
-    again = await http.post(f"{base}/{item['id']}/approve", json={"reviewer": "kim"})
+    again = await http.post(f"{base}/{item['id']}/approve", json={})
     assert again.status_code == 409
 
     convo = r.json()["conversation_id"]
-    log = (await http.get(f"/v1/tenants/{world.tenant_id}/conversations/{convo}/messages")).json()
+    log = (await http.get(f"/v1/conversations/{convo}/messages")).json()
     assert [m["direction"] for m in log] == ["inbound", "outbound"]
 
 
 async def test_approving_an_item_with_no_draft_needs_a_reply(
-    http: httpx.AsyncClient, desk: Desk, world: World
+    http: httpx.AsyncClient, desk: Desk, world: World, session: AsyncSession
 ) -> None:
     desk.llm.script(*[loop_turn() for _ in range(10)])
     await text(desk, world, "hello")  # step limit: no draft
-    base = f"/v1/tenants/{world.tenant_id}/reviews"
+    await act_as(http, session, world.tenant_id, Role.REVIEWER)
+    base = "/v1/reviews"
     [item] = (await http.get(base)).json()
-    r = await http.post(f"{base}/{item['id']}/approve", json={"reviewer": "sam"})
+    r = await http.post(f"{base}/{item['id']}/approve", json={})
     assert r.status_code == 422
-    ok = await http.post(
-        f"{base}/{item['id']}/approve", json={"reviewer": "sam", "reply": "Hi! How can we help?"}
-    )
+    ok = await http.post(f"{base}/{item['id']}/approve", json={"reply": "Hi! How can we help?"})
     assert ok.status_code == 200
     assert await count(desk, ReviewItem) == 1

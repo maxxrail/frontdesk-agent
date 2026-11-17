@@ -28,6 +28,7 @@ from frontdesk_agent.db.repositories import (
 )
 from frontdesk_agent.db.session import make_engine, make_sessionmaker
 from frontdesk_agent.demo_clinics import CLINICS, fake_phone
+from frontdesk_agent.onboarding import first_admin
 from frontdesk_agent.retrieval.embeddings import default_embedder
 from frontdesk_agent.retrieval.ingest import ingest_directory
 from frontdesk_agent.retrieval.store import PolicyStore
@@ -114,9 +115,13 @@ async def seed(clients_per_tenant: int, reset: bool, sms_number: str | None = No
             policies = await ingest_directory(
                 PolicyStore(session, tenant.id, embedder), POLICY_ROOT / clinic.slug
             )
+            access = await first_admin(session, tenant.id, f"admin@{clinic.slug}.example")
             print(
                 f"seeded {clinic.name}: tenant_id={tenant.id}, "
-                f"{len(policies)} policy documents, {sum(p.chunks for p in policies)} chunks"
+                f"{len(policies)} policy documents, {sum(p.chunks for p in policies)} chunks\n"
+                f"  admin login {access.email} / {access.password}\n"
+                f"  admin API key {access.api_key}\n"
+                "  (synthetic demo credentials, shown once)"
             )
 
         await session.commit()

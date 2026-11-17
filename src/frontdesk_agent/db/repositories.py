@@ -20,6 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from frontdesk_agent.db.base import TenantScoped
 from frontdesk_agent.db.models import (
+    ApiKey,
     Appointment,
     AppointmentStatus,
     AuditEvent,
@@ -34,9 +35,11 @@ from frontdesk_agent.db.models import (
     ProviderSchedule,
     ReviewItem,
     ReviewStatus,
+    Role,
     SlotOffer,
     SmsMessage,
     Tenant,
+    User,
     WaitlistEntry,
     WaitlistStatus,
 )
@@ -536,3 +539,51 @@ class AuditRepository(TenantRepository[AuditEvent]):
             stmt = stmt.where(AuditEvent.kind == kind)
         stmt = stmt.order_by(AuditEvent.seq.desc()).limit(limit)
         return list((await self._session.execute(stmt)).scalars())
+
+
+class CredentialDirectory:
+    """The two lookups that happen before the tenant is known: a user by
+    email at login, and an API key by its public prefix.
+
+    Like TenantDirectory, deliberately not tenant-bound (ADR 0005, 0016):
+    the tenant is what these lookups establish. Nothing else may use them.
+    """
+
+    def __init__(self, session: AsyncSession) -> None:
+        self._session = session
+
+    async def user_by_email(self, email: str) -> User | None:
+        stmt = select(User).where(User.email == email.strip().lower())
+        return (await self._session.execute(stmt)).scalar_one_or_none()
+
+    async def api_key_by_prefix(self, prefix: str) -> ApiKey | None:
+        stmt = select(ApiKey).where(ApiKey.prefix == prefix)
+        return (await self._session.execute(stmt)).scalar_one_or_none()
+
+
+class EmailTakenError(Exception):
+    pass
+
+
+class UserRepository(TenantRepository[User]):
+    model = User
+
+    async def create(self, *, email: str, password_hash: str, role: Role) -> User:
+        email = email.strip().lower()
+        if await CredentialDirectory(self._session).user_by_email(email) is not None:
+            raise EmailTakenError("a user with that email already exists")
+        return await self.add(User(email=email, password_hash=password_hash, role=role))
+
+
+class ApiKeyRepository(TenantRepository[ApiKey]):
+    model = ApiKey
+
+    async def create(self, *, name: str, prefix: str, key_hash: str, role: Role) -> ApiKey:
+        return await self.add(ApiKey(name=name, prefix=prefix, key_hash=key_hash, role=role))
+
+    async def revoke(self, key_id: uuid.UUID, now: datetime) -> ApiKey:
+        key = await self.get(key_id)
+        if key.revoked_at is None:
+            key.revoked_at = now
+            await self._session.flush()
+        return key

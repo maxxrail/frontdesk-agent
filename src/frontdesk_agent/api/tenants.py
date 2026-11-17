@@ -1,26 +1,26 @@
-"""Tenant-scoped data endpoints.
+"""Tenant data endpoints: clients, appointments, model calls.
 
-The tenant comes from the URL for now. Module 6 replaces that with the tenant
-bound to the caller's API key, so a caller can no longer name someone else's
-tenant at all. Until then, isolation is enforced below the API, in the
-repositories, which is where it has to hold regardless of how auth evolves.
+The tenant comes from the caller's credential (api/auth.py, ADR 0016), so a
+request cannot name another tenant at all. Isolation still holds below the
+API too, in the tenant-bound repositories (ADR 0005).
+
+Tenants themselves are created with scripts/create_tenant.py, not over HTTP:
+no tenant's credential should be able to create another tenant.
 """
 
 import uuid
 from datetime import datetime
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Query, Response, status
-from sqlalchemy.ext.asyncio import AsyncSession
+from fastapi import APIRouter, Header, HTTPException, Query, Response, status
 
+from frontdesk_agent.api.auth import Admin, Reviewer, Session
 from frontdesk_agent.api.schemas import (
     AppointmentIn,
     AppointmentOut,
     ClientOut,
     ClientPage,
     LLMCallOut,
-    TenantIn,
-    TenantOut,
 )
 from frontdesk_agent.db.repositories import (
     AppointmentRepository,
@@ -28,42 +28,19 @@ from frontdesk_agent.db.repositories import (
     IdempotencyConflictError,
     LLMCallRepository,
     NotFoundError,
-    TenantDirectory,
 )
-from frontdesk_agent.db.session import get_session
 
-router = APIRouter(prefix="/v1/tenants", tags=["tenants"])
-
-Session = Annotated[AsyncSession, Depends(get_session)]
+router = APIRouter(prefix="/v1", tags=["tenant data"])
 
 
-async def tenant_scope(tenant_id: uuid.UUID, session: Session) -> uuid.UUID:
-    """Resolve the tenant once per request; 404 if it does not exist."""
-    try:
-        await TenantDirectory(session).get(tenant_id)
-    except NotFoundError as exc:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Tenant not found.") from exc
-    return tenant_id
-
-
-TenantId = Annotated[uuid.UUID, Depends(tenant_scope)]
-
-
-@router.post("", response_model=TenantOut, status_code=status.HTTP_201_CREATED)
-async def create_tenant(body: TenantIn, session: Session) -> TenantOut:
-    tenant = await TenantDirectory(session).create(**body.model_dump())
-    await session.commit()
-    return TenantOut.model_validate(tenant)
-
-
-@router.get("/{tenant_id}/clients", response_model=ClientPage)
+@router.get("/clients", response_model=ClientPage)
 async def list_clients(
-    tenant_id: TenantId,
+    who: Reviewer,
     session: Session,
     limit: Annotated[int, Query(ge=1, le=200)] = 50,
     offset: Annotated[int, Query(ge=0)] = 0,
 ) -> ClientPage:
-    repo = ClientRepository(session, tenant_id)
+    repo = ClientRepository(session, who.tenant_id)
     items = await repo.list(limit=limit, offset=offset)
     return ClientPage(
         items=[ClientOut.model_validate(c) for c in items],
@@ -74,17 +51,17 @@ async def list_clients(
 
 
 @router.post(
-    "/{tenant_id}/appointments",
+    "/appointments",
     response_model=AppointmentOut,
     status_code=status.HTTP_201_CREATED,
     responses={
         200: {"description": "Replay: this Idempotency-Key already booked this appointment."},
-        404: {"description": "Tenant, client or provider not found."},
+        404: {"description": "Client or provider not found."},
         409: {"description": "Idempotency-Key reused with a different booking."},
     },
 )
 async def book_appointment(
-    tenant_id: TenantId,
+    who: Admin,
     body: AppointmentIn,
     session: Session,
     response: Response,
@@ -92,7 +69,7 @@ async def book_appointment(
 ) -> AppointmentOut:
     """Book an appointment. Send an ``Idempotency-Key`` header from anything
     that may retry (an SMS webhook will), and a retry cannot double-book."""
-    repo = AppointmentRepository(session, tenant_id)
+    repo = AppointmentRepository(session, who.tenant_id)
     try:
         result = await repo.book(**body.model_dump(), idempotency_key=idempotency_key)
     except NotFoundError as exc:
@@ -105,31 +82,31 @@ async def book_appointment(
     return AppointmentOut.model_validate(result.appointment)
 
 
-@router.get("/{tenant_id}/appointments", response_model=list[AppointmentOut])
+@router.get("/appointments", response_model=list[AppointmentOut])
 async def list_appointments(
-    tenant_id: TenantId, session: Session, start: datetime, end: datetime
+    who: Reviewer, session: Session, start: datetime, end: datetime
 ) -> list[AppointmentOut]:
-    appts = await AppointmentRepository(session, tenant_id).between(start, end)
+    appts = await AppointmentRepository(session, who.tenant_id).between(start, end)
     return [AppointmentOut.model_validate(a) for a in appts]
 
 
-@router.post("/{tenant_id}/appointments/{appointment_id}/cancel", response_model=AppointmentOut)
+@router.post("/appointments/{appointment_id}/cancel", response_model=AppointmentOut)
 async def cancel_appointment(
-    tenant_id: TenantId, appointment_id: uuid.UUID, session: Session
+    who: Admin, appointment_id: uuid.UUID, session: Session
 ) -> AppointmentOut:
     try:
-        appt = await AppointmentRepository(session, tenant_id).cancel(appointment_id)
+        appt = await AppointmentRepository(session, who.tenant_id).cancel(appointment_id)
     except NotFoundError as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Appointment not found.") from exc
     await session.commit()
     return AppointmentOut.model_validate(appt)
 
 
-@router.get("/{tenant_id}/llm-calls", response_model=list[LLMCallOut])
+@router.get("/llm-calls", response_model=list[LLMCallOut])
 async def list_llm_calls(
-    tenant_id: TenantId,
+    who: Admin,
     session: Session,
     limit: Annotated[int, Query(ge=1, le=200)] = 50,
 ) -> list[LLMCallOut]:
-    calls = await LLMCallRepository(session, tenant_id).recent(limit=limit)
+    calls = await LLMCallRepository(session, who.tenant_id).recent(limit=limit)
     return [LLMCallOut.model_validate(c) for c in calls]

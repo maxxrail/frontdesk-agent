@@ -10,6 +10,8 @@ from fastapi import FastAPI, Request, status
 from fastapi.responses import JSONResponse
 
 from frontdesk_agent import __version__
+from frontdesk_agent.api.admin import router as admin_router
+from frontdesk_agent.api.auth import router as auth_router
 from frontdesk_agent.api.channels import router as channels_router
 from frontdesk_agent.api.drafts import router as drafts_router
 from frontdesk_agent.api.health import router as health_router
@@ -35,6 +37,12 @@ def create_app(database_url: str | None = None) -> FastAPI:
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+        if not get_settings().jwt_secret.get_secret_value():
+            # Refuse to serve rather than sign login tokens with a guessable
+            # key. Checked at startup, not import, so tools can still import
+            # the app. Generate one with:
+            #   python -c "import secrets; print(secrets.token_urlsafe(48))"
+            raise RuntimeError("FDA_JWT_SECRET is not set; refusing to start (ADR 0016).")
         # Creating an engine does not connect, so the app starts even when
         # Postgres is down; /readyz reports it instead of the process crashing.
         engine = make_engine(url)
@@ -66,6 +74,8 @@ def create_app(database_url: str | None = None) -> FastAPI:
         )
 
     app.include_router(health_router)
+    app.include_router(auth_router)
+    app.include_router(admin_router)
     app.include_router(drafts_router)
     app.include_router(tenants_router)
     app.include_router(policy_router)

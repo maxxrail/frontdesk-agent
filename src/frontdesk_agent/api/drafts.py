@@ -4,6 +4,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
+from frontdesk_agent.api.auth import Reviewer
 from frontdesk_agent.dependencies import get_drafter
 from frontdesk_agent.drafting.schemas import ReminderRequest, ReminderResponse
 from frontdesk_agent.drafting.service import ReminderDrafter
@@ -21,6 +22,7 @@ router = APIRouter(prefix="/v1/drafts", tags=["drafts"])
     },
 )
 async def draft_reminder(
+    who: Reviewer,
     request: ReminderRequest,
     drafter: Annotated[ReminderDrafter, Depends(get_drafter)],
 ) -> ReminderResponse:

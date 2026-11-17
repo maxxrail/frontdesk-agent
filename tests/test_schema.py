@@ -44,6 +44,8 @@ def test_schema_has_the_expected_tables() -> None:
         "waitlist_entries",
         "llm_calls",
         "audit_events",
+        "users",
+        "api_keys",
         "policy_documents",
         "policy_chunks",
         "provider_schedules",

@@ -7,6 +7,7 @@ Secrets belong in the environment or a secret manager, never in git.
 from functools import lru_cache
 from typing import Literal
 
+from pydantic import SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -54,6 +55,12 @@ class Settings(BaseSettings):
     public_base_url: str = "http://localhost:8000"
     # "twilio" sends real texts; "console" prints them (local development).
     sms_sender: Literal["twilio", "console"] = "console"
+
+    # Auth (Module 6, ADR 0016). Signs dashboard login tokens. No default: the
+    # app refuses to start without it rather than sign with a guessable key.
+    # SecretStr keeps it out of reprs and logs.
+    jwt_secret: SecretStr = SecretStr("")
+    jwt_ttl_minutes: int = 60
 
     # Background jobs: "redis" for the arq worker, "inline" to run them inside
     # the API process (local development without Redis).

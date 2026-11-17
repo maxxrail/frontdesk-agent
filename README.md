@@ -33,6 +33,8 @@ All data in this repo is synthetic. No real patient or customer data is used.
 git clone https://github.com/<you>/frontdesk-agent.git
 cd frontdesk-agent
 cp .env.example .env
+# Set FDA_JWT_SECRET in .env (the server refuses to start without it):
+uv run python -c "import secrets; print('FDA_JWT_SECRET=' + secrets.token_urlsafe(48))" >> .env
 
 # With Docker (also starts Postgres with pgvector)
 docker compose up --build
@@ -40,7 +42,7 @@ docker compose up --build
 # Or locally with uv (Postgres from compose: docker compose up -d db)
 uv sync --extra dev
 uv run alembic upgrade head
-uv run python scripts/seed.py   # two synthetic clinics with policies; prints tenant IDs
+uv run python scripts/seed.py   # two synthetic clinics; prints each one's admin login and API key
 uv run uvicorn frontdesk_agent.main:app --reload
 ```
 
@@ -51,11 +53,19 @@ curl http://localhost:8000/healthz
 # {"status":"ok","service":"frontdesk-agent","version":"0.0.0","env":"local"}
 ```
 
+Every other endpoint needs a credential, and the tenant comes from it
+(ADR 0016): an API key in `X-API-Key` for scripts, or a bearer token from
+`POST /v1/auth/login` for people. Use the admin API key the seed printed:
+
+```bash
+export KEY=fda_...   # from scripts/seed.py
+```
+
 Draft a reminder (needs `FDA_ANTHROPIC_API_KEY` in `.env`):
 
 ```bash
 curl -X POST http://localhost:8000/v1/drafts/reminder \
-  -H 'Content-Type: application/json' \
+  -H "X-API-Key: $KEY" -H 'Content-Type: application/json' \
   -d '{
     "business_name": "Maple Dental",
     "business_type": "dental office",
@@ -70,10 +80,10 @@ List a seeded clinic's clients, then book idempotently (send the same request
 twice: 201, then 200 with the same appointment):
 
 ```bash
-curl "http://localhost:8000/v1/tenants/<tenant_id>/clients?limit=5"
+curl -H "X-API-Key: $KEY" "http://localhost:8000/v1/clients?limit=5"
 
-curl -X POST http://localhost:8000/v1/tenants/<tenant_id>/appointments \
-  -H 'Content-Type: application/json' \
+curl -X POST http://localhost:8000/v1/appointments \
+  -H "X-API-Key: $KEY" -H 'Content-Type: application/json' \
   -H 'Idempotency-Key: demo-1' \
   -d '{"client_id": "<client_id>", "provider_id": "<provider_id>",
        "starts_at": "2030-03-04T10:00:00-05:00",
@@ -85,8 +95,8 @@ sources; a question the documents do not cover is refused with
 `"needs_human": true`:
 
 ```bash
-curl -X POST http://localhost:8000/v1/tenants/<tenant_id>/policy/answer \
-  -H 'Content-Type: application/json' \
+curl -X POST http://localhost:8000/v1/policy/answer \
+  -H "X-API-Key: $KEY" -H 'Content-Type: application/json' \
   -d '{"question": "is there a fee if I cancel the morning of?"}'
 ```
 
@@ -119,9 +129,10 @@ you> my gum is bleeding a lot          # held for review: try /reviews, /approve
 5. In the Twilio console, set the number's "A message comes in" webhook to
    `https://<your-ngrok-host>/v1/channels/sms` (HTTP POST).
 
-Then text it. Pending reviews: `GET /v1/tenants/<tenant_id>/reviews`; decide
-with `POST .../reviews/<id>/approve` or `/reject` and a body like
-`{"reviewer": "you", "reply": "optional edited text"}`.
+Then text it. Pending reviews: `GET /v1/reviews`; decide with
+`POST /v1/reviews/<id>/approve` or `/reject` and a body like
+`{"reply": "optional edited text"}`. The reviewer recorded in the audit trail
+is whoever the credential belongs to.
 
 A text that is exactly `CANCEL` is an opt-out keyword to Twilio and is never
 treated as a cancellation; "cancel my appointment" works. To change Twilio's
@@ -173,12 +184,14 @@ src/frontdesk_agent/
   prompts.py         loads and renders versioned prompt files
   api/health.py      /healthz and /readyz
   api/drafts.py      /v1/drafts/reminder
-  api/tenants.py     /v1/tenants/... clients, appointments, llm-calls
+  api/auth.py        credentials -> tenant and role; /v1/auth/login
+  api/admin.py       /v1/api-keys, /v1/users, /v1/audit-events (admins)
+  api/tenants.py     /v1/clients, appointments, llm-calls
   db/models.py       tables
   db/repositories.py tenant-bound data access (read this first)
   retrieval/         chunking, embeddings, ingestion, search, metrics
   answering/         grounded policy answers with citations and refusal
-  api/policy.py      /v1/tenants/.../policy/answer, search, documents
+  api/policy.py      /v1/policy/answer, search, documents
   api/channels.py    Twilio webhook: signature check, dedupe, enqueue
   api/reviews.py     review queue: list, approve, edit and approve, reject
   agent/             tools, risk policy, scheduling, the agent loop
