@@ -23,7 +23,7 @@ from datetime import datetime
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from frontdesk_agent.agent.loop import AgentRun, run_agent, trim_history
+from frontdesk_agent.agent.loop import PROMPT_VERSION, AgentRun, run_agent, trim_history
 from frontdesk_agent.agent.risk import MEDICAL_HOLDING_MESSAGE, classify
 from frontdesk_agent.agent.tools import HeldAction, ToolContext
 from frontdesk_agent.db.models import (
@@ -71,6 +71,8 @@ class FrontDesk:
     embedder: Embedder
     clock: Clock
     slot_filler: SlotFiller
+    # Which prompts/agent/<version>.md to run: a setting, so evals can compare versions.
+    prompt_version: str = PROMPT_VERSION
 
     # -- inbound -----------------------------------------------------------
 
@@ -122,14 +124,16 @@ class FrontDesk:
 
         flag = classify(msg.body)
         if flag is not None:
-            run = await run_agent(self.llm, ctx, history, read_only=True)
+            run = await run_agent(
+                self.llm, ctx, history, read_only=True, prompt_version=self.prompt_version
+            )
             self._save(convo, history, run)
             self._hold(session, convo, msg, HeldAction(flag.kind, flag.reason), run.reply)
             if flag.kind is ReviewKind.MEDICAL:
                 self._text(effects, tenant, convo, client, MEDICAL_HOLDING_MESSAGE)
             return f"held_for_review:{flag.kind.value}"
 
-        run = await run_agent(self.llm, ctx, history)
+        run = await run_agent(self.llm, ctx, history, prompt_version=self.prompt_version)
         self._save(convo, history, run)
         for appt in ctx.cancelled:
             self._queue_slot_fill(effects, tenant, appt, client)

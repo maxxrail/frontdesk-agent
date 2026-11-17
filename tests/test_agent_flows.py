@@ -12,7 +12,7 @@ import pytest
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from frontdesk_agent.agent.loop import MAX_STEPS
+from frontdesk_agent.agent.loop import MAX_STEPS, READ_ONLY_NOTE
 from frontdesk_agent.agent.risk import MEDICAL_HOLDING_MESSAGE
 from frontdesk_agent.db.models import (
     Appointment,
@@ -29,6 +29,7 @@ from frontdesk_agent.db.models import (
 from frontdesk_agent.db.repositories import AppointmentRepository
 from frontdesk_agent.frontdesk.ports import Effects
 from frontdesk_agent.llm.fake import call, loop_turn, say
+from frontdesk_agent.prompts import PromptError
 from tests.desk import CLIENT_PHONE, NOW, Desk, World, local, make_desk, make_world, text
 
 
@@ -179,6 +180,9 @@ async def test_medical_question_is_held_with_a_safety_message(
     # The draft ran with read-only tools: it could not have booked or cancelled.
     assert "book_appointment" not in desk.llm.conversations[0]["tools"]  # type: ignore[operator]
     assert "search_policy" in desk.llm.conversations[0]["tools"]  # type: ignore[operator]
+    # It is told the team already has it, since escalate_to_human is not offered.
+    assert "escalate_to_human" not in desk.llm.conversations[0]["tools"]  # type: ignore[operator]
+    assert READ_ONLY_NOTE in str(desk.llm.conversations[0]["system"])
 
 
 async def test_money_question_is_held_silently(desk: Desk, world: World) -> None:
@@ -262,3 +266,18 @@ async def test_a_failed_send_is_logged_not_lost(
         desk, select(func.count()).where(SmsMessage.status == MessageStatus.FAILED)
     )
     assert failed == 1
+
+
+async def test_prompt_version_setting_reaches_the_model_and_the_record(
+    desk: Desk, world: World
+) -> None:
+    """Evals compare prompt versions; the version must be the one that ran."""
+    desk.services.frontdesk.prompt_version = "v1"
+    desk.llm.script(say("Hi Dana, how can I help?"))
+    assert await text(desk, world, "hi") == "agent_reply"
+    recorded = await scalar(desk, select(LLMCall.prompt_version))
+    assert recorded == "v1"
+
+    desk.services.frontdesk.prompt_version = "v999"
+    with pytest.raises(PromptError):  # a missing version fails loudly, never falls back
+        await text(desk, world, "hello again")

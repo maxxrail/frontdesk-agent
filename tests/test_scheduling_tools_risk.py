@@ -11,11 +11,12 @@ from frontdesk_agent.agent.loop import trim_history
 from frontdesk_agent.agent.risk import classify
 from frontdesk_agent.agent.scheduling import free_slots
 from frontdesk_agent.agent.tools import TOOLS, ToolContext, execute
-from frontdesk_agent.db.models import Client, ProviderSchedule, ReviewKind
+from frontdesk_agent.db.models import Client, Provider, ProviderSchedule, ReviewKind
 from frontdesk_agent.db.repositories import (
     AppointmentRepository,
     ClientRepository,
     ConversationRepository,
+    ProviderRepository,
     ScheduleRepository,
     TenantDirectory,
 )
@@ -96,6 +97,53 @@ async def test_bad_inputs_are_errors_the_model_can_fix(ctx: ToolContext) -> None
     assert err and "Unknown tool" in str(body["error"])
     out = await execute(ctx, "book_appointment", {}, {"search_policy"})  # not allowed here
     assert out.is_error
+
+
+async def test_from_time_reaches_slots_past_the_first_page(ctx: ToolContext) -> None:
+    """A full day has more slots than the result shows; from_time reaches the afternoon."""
+    body, err = await run(ctx, "check_availability", date="2030-01-08")
+    shown = [str(s["starts_at"])[11:16] for s in body["open_slots"]]  # type: ignore[attr-defined]
+    assert not err and shown[0] == "09:00" and "14:00" not in shown
+    assert body["more_available"] == 8  # 16 half-hour slots from 9 to 5, 8 shown
+
+    body, err = await run(ctx, "check_availability", date="2030-01-08", from_time="14:00")
+    shown = [str(s["starts_at"])[11:16] for s in body["open_slots"]]  # type: ignore[attr-defined]
+    assert not err and shown == ["14:00", "14:30", "15:00", "15:30", "16:00", "16:30"]
+    assert body["more_available"] == 0
+
+    body, err = await run(ctx, "check_availability", date="2030-01-08", from_time="2pm")
+    assert err and "from_time" in str(body["error"])
+
+
+async def test_provider_by_name_or_id_and_only_this_clinics(
+    session: AsyncSession, ctx: ToolContext, world: World
+) -> None:
+    lena = await ProviderRepository(session, ctx.tenant.id).add(Provider(name="Lena Park"))
+    await ScheduleRepository(session, ctx.tenant.id).add(
+        ProviderSchedule(provider_id=lena.id, weekday=1, start_time=time(9), end_time=time(10))
+    )
+    other = await TenantDirectory(session).create(
+        name="Elsewhere", slug="elsewhere", business_type="clinic", sms_number="+12005550111"
+    )
+    theirs = await ProviderRepository(session, other.id).add(Provider(name="Lena Other"))
+
+    async def who(provider: str) -> tuple[set[object], dict[str, object], bool]:
+        body, err = await run(ctx, "check_availability", date="2030-01-08", provider=provider)
+        slots = body.get("open_slots", [])
+        return {s["provider"] for s in slots}, body, err  # type: ignore[attr-defined]
+
+    assert (await who("Lena"))[0] == {"Lena Park"}
+    assert (await who("dr. osei"))[0] == {"Dr. Osei"}
+    assert (await who("with Dr Osei"))[0] == {"Dr. Osei"}
+    assert (await who(str(lena.id)))[0] == {"Lena Park"}
+
+    _, body, err = await who("Dr. Smith")
+    assert err and "Dr. Osei, Lena Park" in str(body["error"])
+    # Another clinic's provider is unknown here, by id or by name.
+    _, body, err = await who(str(theirs.id))
+    assert err and "No provider matches" in str(body["error"])
+    _, body, err = await who("Lena Other")
+    assert err and "No provider matches" in str(body["error"])
 
 
 async def test_booking_only_scheduled_open_slots(ctx: ToolContext, world: World) -> None:

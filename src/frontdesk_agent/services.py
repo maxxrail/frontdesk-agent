@@ -139,6 +139,7 @@ def build_services(
         embedder=embedder or default_embedder(),
         clock=SystemClock(),
         slot_filler=SlotFiller(EpsilonGreedy(epsilon=0.1, rng=random.Random())),
+        prompt_version=settings.agent_prompt_version,
     )
     services = Services(sessionmaker, frontdesk, sender, queue)
     if isinstance(queue, InlineQueue):

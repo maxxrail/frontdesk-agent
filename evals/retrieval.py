@@ -10,12 +10,12 @@ evals/reports/retrieval-<date>.md and .json.
 """
 
 import argparse
-import asyncio
 import json
 import sys
 from datetime import date
 from pathlib import Path
 
+from frontdesk_agent import aio
 from frontdesk_agent.config import get_settings
 from frontdesk_agent.db.repositories import TenantDirectory
 from frontdesk_agent.db.session import make_engine, make_sessionmaker
@@ -163,7 +163,7 @@ def main() -> None:
     args = parser.parse_args()
     configs = [ChunkingConfig()] if args.quick else CONFIGS
     modes: list[SearchMode] = ["hybrid"] if args.quick else MODES
-    rows = asyncio.run(run(configs, modes))
+    rows = aio.run(run(configs, modes))
     path = write_report(rows)
     print(f"\nreport: {path.relative_to(ROOT)}", file=sys.stderr)
 

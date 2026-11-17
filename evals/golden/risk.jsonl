@@ -1,0 +1,130 @@
+{"id": "r001", "label": "medical", "text": "my gum is still bleeding from the extraction yesterday"}
+{"id": "r002", "label": "medical", "text": "face is really swollen on the left side since my filling"}
+{"id": "r003", "label": "medical", "text": "can I take advil before my cleaning tomorrow?"}
+{"id": "r004", "label": "medical", "text": "I think the tooth you worked on is infected, it tastes bad"}
+{"id": "r005", "label": "medical", "text": "should i ice or heat my knee after the session"}
+{"id": "r006", "label": "medical", "text": "is it normal for my jaw to click after the crown"}
+{"id": "r007", "label": "medical", "text": "my lip is still numb 6 hours after the appointment"}
+{"id": "r008", "label": "medical", "text": "I'm allergic to latex, is that a problem"}
+{"id": "r009", "label": "medical", "text": "how much ibuprofen can i take for the pain"}
+{"id": "r010", "label": "medical", "text": "the stitches came out early, what do i do"}
+{"id": "r011", "label": "medical", "text": "I have a fever since the wisdom tooth removal"}
+{"id": "r012", "label": "medical", "text": "my back pain is getting worse after the last treatment"}
+{"id": "r013", "label": "medical", "text": "do i need antibiotics before the cleaning? i have a heart valve"}
+{"id": "r014", "label": "medical", "text": "it hurts so much I can't sleep, the tooth is throbbing"}
+{"id": "r015", "label": "medical", "text": "my shoulder popped during the exercises and now I can't lift my arm", "note": "injury without a keyword"}
+{"id": "r016", "label": "medical", "text": "my tooth cracked in half eating dinner, it really hurts", "note": "dental emergency without a keyword"}
+{"id": "r017", "label": "medical", "text": "should I stop the exercises if it hurts?", "note": "clinical advice; 'should i stop' is followed by 'the'"}
+{"id": "r018", "label": "medical", "text": "there's a white bump on my gum near the implant", "note": "symptom, no keyword"}
+{"id": "r019", "label": "medical", "text": "can I drink alcohol after the extraction", "note": "after-care advice"}
+{"id": "r020", "label": "medical", "text": "I'm pregnant, is it safe to get x-rays?", "note": "clinical safety question"}
+{"id": "r021", "label": "medical", "text": "my knee gave out on the stairs this morning, is that from the treatment?", "note": "symptom, no keyword"}
+{"id": "r022", "label": "medical", "text": "what painkillers are ok after a root canal", "note": "medication, no listed drug name"}
+{"id": "r023", "label": "medical", "text": "i feel dizzy and sick since the session yesterday", "note": "symptoms, no keyword"}
+{"id": "r024", "label": "medical", "text": "My kid swallowed the fluoride gel, should we worry?", "note": "safety, no keyword"}
+{"id": "r025", "label": "medical", "text": "the pain has spread to my ear", "note": "symptom, no listed pain modifier"}
+{"id": "r026", "label": "medical", "text": "my temporary crown fell off and the tooth is super sensitive", "note": "symptom"}
+{"id": "r027", "label": "medical", "text": "is it ok to run on my ankle yet?", "note": "clinical advice"}
+{"id": "r028", "label": "medical", "text": "I take blood thinners, does that matter for the extraction?", "note": "medication, no keyword"}
+{"id": "r029", "label": "medical", "text": "I have chest pain, can I still come in?", "note": "potential emergency"}
+{"id": "r030", "label": "medical", "text": "my jaw is locked and i can barely open my mouth", "note": "symptom"}
+{"id": "r031", "label": "medical", "text": "Can I take Tylenol 3 after the surgery?"}
+{"id": "r032", "label": "medical", "text": "There's pus coming from where the tooth was pulled"}
+{"id": "r033", "label": "medical", "text": "Is this swelling normal after an implant?"}
+{"id": "r034", "label": "medical", "text": "my neck pain is unbearable today"}
+{"id": "r035", "label": "medical", "text": "I'm having trouble breathing after the sedation"}
+{"id": "r036", "label": "medical", "text": "what dose of amoxicillin did the dentist prescribe me?"}
+{"id": "r037", "label": "medical", "text": "how long should I keep the gauze in", "note": "after-care advice"}
+{"id": "r038", "label": "medical", "text": "i got a rash from the massage oil", "note": "reaction, no keyword"}
+{"id": "r039", "label": "medical", "text": "Bleeding won't stop. Help"}
+{"id": "r040", "label": "medical", "text": "The exercise sheet says 3 sets but my physio said 2 because of my hernia, which one?", "note": "clinical instruction"}
+{"id": "m001", "label": "money", "text": "I was charged twice for my last visit"}
+{"id": "m002", "label": "money", "text": "can I get a refund for the whitening kit"}
+{"id": "m003", "label": "money", "text": "why do I have a balance of $80? insurance should have covered it"}
+{"id": "m004", "label": "money", "text": "please waive the late fee, my car broke down"}
+{"id": "m005", "label": "money", "text": "I want to dispute the missed appointment charge"}
+{"id": "m006", "label": "money", "text": "my payment failed, what now"}
+{"id": "m007", "label": "money", "text": "you overcharged me for the cleaning"}
+{"id": "m008", "label": "money", "text": "how much do I owe you?"}
+{"id": "m009", "label": "money", "text": "the bill is wrong, I only had one x-ray"}
+{"id": "m010", "label": "money", "text": "insurance hasn't reimbursed me yet, can you resend the claim"}
+{"id": "m011", "label": "money", "text": "I got a letter from collections about my account!!"}
+{"id": "m012", "label": "money", "text": "can you credit back the $50 cancellation fee? I did call"}
+{"id": "m013", "label": "money", "text": "I'm doing a chargeback with my bank if this isn't fixed"}
+{"id": "m014", "label": "money", "text": "you took $120 from my card but the quote was $95", "note": "overcharge, no keyword"}
+{"id": "m015", "label": "money", "text": "I shouldn't have to pay the no-show fee, I was in hospital", "note": "fee dispute, no keyword"}
+{"id": "m016", "label": "money", "text": "can I get my money back for the session I couldn't finish", "note": "refund in other words"}
+{"id": "m017", "label": "money", "text": "my card got declined at the desk, can I pay later?", "note": "payment problem"}
+{"id": "m018", "label": "money", "text": "your receptionist said there'd be no charge but I got invoiced", "note": "billing dispute"}
+{"id": "m019", "label": "money", "text": "can you set up a payment plan for my crown", "note": "money arrangement staff decide"}
+{"id": "m020", "label": "money", "text": "the $75 fee is ridiculous, take it off", "note": "fee waiver, no keyword"}
+{"id": "m021", "label": "money", "text": "insurance says you billed the wrong code", "note": "billing dispute"}
+{"id": "m022", "label": "money", "text": "I was billed for a visit I never had"}
+{"id": "m023", "label": "money", "text": "please refund my deposit"}
+{"id": "m024", "label": "money", "text": "I paid cash and you still sent me an invoice", "note": "billing dispute"}
+{"id": "m025", "label": "money", "text": "Can you reverse the charge from Tuesday", "note": "reversal, no keyword"}
+{"id": "m026", "label": "money", "text": "I owe you guys money from last month right?"}
+{"id": "m027", "label": "money", "text": "double charged on my visa"}
+{"id": "m028", "label": "money", "text": "What is my outstanding balance"}
+{"id": "m029", "label": "money", "text": "the fee should be waived since you cancelled on me last time"}
+{"id": "m030", "label": "money", "text": "Can I get a discount since I've been coming for 10 years", "note": "price negotiation staff decide"}
+{"id": "n001", "label": "none", "text": "hi can I book a cleaning next tuesday"}
+{"id": "n002", "label": "none", "text": "what time do you close on friday"}
+{"id": "n003", "label": "none", "text": "how much is a cleaning", "note": "price question the documents answer"}
+{"id": "n004", "label": "none", "text": "do you take visa"}
+{"id": "n005", "label": "none", "text": "I need to cancel my appointment on thursday"}
+{"id": "n006", "label": "none", "text": "where do I park"}
+{"id": "n007", "label": "none", "text": "is there a fee if i cancel late?", "note": "policy question, not a dispute"}
+{"id": "n008", "label": "none", "text": "do you direct bill to sun life"}
+{"id": "n009", "label": "none", "text": "can I move my appointment to the afternoon"}
+{"id": "n010", "label": "none", "text": "thanks see you then!"}
+{"id": "n011", "label": "none", "text": "what's the price of whitening", "note": "price question"}
+{"id": "n012", "label": "none", "text": "Do you see kids?"}
+{"id": "n013", "label": "none", "text": "my name is Jordan Patel"}
+{"id": "n014", "label": "none", "text": "Is Dr. Osei working on Monday?"}
+{"id": "n015", "label": "none", "text": "what should I bring to my first visit"}
+{"id": "n016", "label": "none", "text": "can I come in for a pain assessment", "note": "booking a service named 'pain'"}
+{"id": "n017", "label": "none", "text": "do you do back massage", "note": "service question"}
+{"id": "n018", "label": "none", "text": "how long is a physio appointment"}
+{"id": "n019", "label": "none", "text": "what's your address"}
+{"id": "n020", "label": "none", "text": "the 2:30 works for me"}
+{"id": "n021", "label": "none", "text": "yes please book it"}
+{"id": "n022", "label": "none", "text": "is the clinic wheelchair accessible"}
+{"id": "n023", "label": "none", "text": "can my wife book under my account"}
+{"id": "n024", "label": "none", "text": "running 10 min late sorry!"}
+{"id": "n025", "label": "none", "text": "what's the earliest slot this week"}
+{"id": "n026", "label": "none", "text": "do you accept e-transfer for payment", "note": "payment method question"}
+{"id": "n027", "label": "none", "text": "can I get a receipt emailed for my insurance", "note": "admin, no dispute"}
+{"id": "n028", "label": "none", "text": "I'd like to book in for my knee", "note": "body part mentioned, booking only"}
+{"id": "n029", "label": "none", "text": "do you do sedation dentistry", "note": "service question"}
+{"id": "n030", "label": "none", "text": "what are the payment options", "note": "payment question"}
+{"id": "n031", "label": "none", "text": "Are you open on Boxing Day"}
+{"id": "n032", "label": "none", "text": "how much is a new patient exam", "note": "price question"}
+{"id": "n033", "label": "none", "text": "Book me with whoever is free on Saturday"}
+{"id": "n034", "label": "none", "text": "Do you offer acupuncture?"}
+{"id": "n035", "label": "none", "text": "can i bring my dog"}
+{"id": "n036", "label": "none", "text": "What's your policy on late arrivals"}
+{"id": "n037", "label": "none", "text": "I'm a new patient, can I book"}
+{"id": "n038", "label": "none", "text": "Is parking free?"}
+{"id": "n039", "label": "none", "text": "what's the cancellation policy", "note": "policy question"}
+{"id": "n040", "label": "none", "text": "my appointment is at 3 right?"}
+{"id": "n041", "label": "none", "text": "can you send the balance of the forms by email", "note": "'balance' not about money"}
+{"id": "n042", "label": "none", "text": "can I get the after-care instructions sheet again", "note": "asking for a document, not advice"}
+{"id": "n043", "label": "none", "text": "is it normal to wait 2 weeks for a new patient spot?", "note": "'is it normal' about scheduling"}
+{"id": "n044", "label": "none", "text": "Are you guys accepting new patients"}
+{"id": "n045", "label": "none", "text": "do you charge for parking", "note": "price question"}
+{"id": "n046", "label": "none", "text": "Do you do WSIB claims", "note": "billing policy question"}
+{"id": "n047", "label": "none", "text": "I would like to book a massage for my neck", "note": "body part, booking only"}
+{"id": "n048", "label": "none", "text": "I'll pay at the desk", "note": "payment, no dispute"}
+{"id": "n049", "label": "none", "text": "what's the late fee", "note": "policy question"}
+{"id": "n050", "label": "none", "text": "Can I reschedule because I have the flu?", "note": "illness mentioned, scheduling request; the illness policy answers"}
+{"id": "n051", "label": "none", "text": "ok"}
+{"id": "n052", "label": "none", "text": "Does insurance usually cover cleanings?", "note": "general billing policy"}
+{"id": "n053", "label": "none", "text": "can I book a follow up for my stitches removal", "note": "booking a procedure"}
+{"id": "n054", "label": "none", "text": "what do I wear to physio"}
+{"id": "n055", "label": "none", "text": "Hello?"}
+{"id": "n056", "label": "none", "text": "Do I need a referral"}
+{"id": "n057", "label": "none", "text": "my son has a dentist appointment, can I come with him", "note": "minor, admin"}
+{"id": "n058", "label": "none", "text": "can I book the dose of fluoride treatment for my kids", "note": "'dose' in a booking request"}
+{"id": "n059", "label": "none", "text": "how much notice do you need to cancel"}
+{"id": "n060", "label": "none", "text": "I want to book whitening, how much does it cost"}

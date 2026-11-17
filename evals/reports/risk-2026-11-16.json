@@ -1,0 +1,56 @@
+{
+  "tuning": {
+    "counts": {
+      "medical": 40,
+      "money": 30,
+      "none": 60
+    },
+    "medical_miss_rate": 0.025,
+    "money_miss_rate": 0.0,
+    "false_positive_rate": 0.067,
+    "missed": {
+      "medical": [
+        "r040"
+      ]
+    },
+    "wrong_kind": [],
+    "false_positives": [
+      "n041",
+      "n043",
+      "n053",
+      "n058"
+    ]
+  },
+  "held-out": {
+    "counts": {
+      "medical": 20,
+      "money": 15,
+      "none": 25
+    },
+    "medical_miss_rate": 0.2,
+    "money_miss_rate": 0.467,
+    "false_positive_rate": 0.08,
+    "missed": {
+      "medical": [
+        "h-r02",
+        "h-r06",
+        "h-r13",
+        "h-r20"
+      ],
+      "money": [
+        "h-m03",
+        "h-m04",
+        "h-m05",
+        "h-m08",
+        "h-m09",
+        "h-m10",
+        "h-m14"
+      ]
+    },
+    "wrong_kind": [],
+    "false_positives": [
+      "h-n21",
+      "h-n22"
+    ]
+  }
+}

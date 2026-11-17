@@ -20,6 +20,7 @@ from frontdesk_agent.llm.messages import (
     ToolSpec,
     ToolUseBlock,
 )
+from frontdesk_agent.llm.thinking import thinking_off
 
 TOOL_RESPONSE = {
     "id": "msg_01",
@@ -90,6 +91,29 @@ async def test_converse_round_trip_through_the_real_sdk() -> None:
     ]
     assert (turn.input_tokens, turn.output_tokens) == (321, 45)
     assert turn.model == "claude-haiku-4-5-20251001"
+
+
+async def test_thinking_is_off_by_default_in_each_models_own_form() -> None:
+    """Newer models think by default and it counts against max_tokens (llm/thinking.py)."""
+    bodies: list[dict[str, Any]] = []
+    text_reply = {
+        **TOOL_RESPONSE,
+        "content": [{"type": "text", "text": "{}"}],
+        "stop_reason": "end_turn",
+    }
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        bodies.append(json.loads(request.content))
+        return httpx.Response(200, json=text_reply)
+
+    for model in ("claude-sonnet-5-5", "claude-haiku-5-5", "claude-haiku-4-5-20251001"):
+        http = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+        c = AnthropicLLMClient("k", model=model, http_client=http)
+        await c.complete(system="s", user="u", prompt_name="p", prompt_version="v1")
+    assert bodies[0]["thinking"] == {"type": "between_tools"}
+    assert bodies[1]["thinking"] == {"type": "disabled"}
+    assert "thinking" not in bodies[2]  # Haiku 4.5 does not think unless asked
+    assert thinking_off("claude-opus-5-5") is None  # cannot be switched off; not used here
 
 
 @pytest.mark.parametrize(

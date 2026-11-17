@@ -8,15 +8,14 @@ machine. Phone numbers use the 555-01xx range reserved for fiction.
 """
 
 import argparse
-import asyncio
 import random
-from dataclasses import dataclass
 from datetime import UTC, datetime, time, timedelta
 from pathlib import Path
 
 from faker import Faker
 from sqlalchemy import text
 
+from frontdesk_agent import aio
 from frontdesk_agent.config import get_settings
 from frontdesk_agent.db.models import Client, Provider, ProviderSchedule, WaitlistEntry
 from frontdesk_agent.db.repositories import (
@@ -28,6 +27,7 @@ from frontdesk_agent.db.repositories import (
     WaitlistRepository,
 )
 from frontdesk_agent.db.session import make_engine, make_sessionmaker
+from frontdesk_agent.demo_clinics import CLINICS, fake_phone
 from frontdesk_agent.retrieval.embeddings import default_embedder
 from frontdesk_agent.retrieval.ingest import ingest_directory
 from frontdesk_agent.retrieval.store import PolicyStore
@@ -35,57 +35,7 @@ from frontdesk_agent.retrieval.store import PolicyStore
 POLICY_ROOT = Path(__file__).resolve().parent.parent / "data" / "policies"
 
 
-@dataclass(frozen=True)
-class Clinic:
-    name: str
-    slug: str
-    business_type: str
-    sms_number: str
-    area_code: str
-    providers: tuple[tuple[str, str], ...]
-    # weekday (0 = Monday) -> (open, close), matching the clinic's hours document
-    hours: dict[int, tuple[str, str]]
-
-
-CLINICS = (
-    Clinic(
-        "Maple Dental",
-        "maple-dental",
-        "dental office",
-        "+14165550100",
-        "416",
-        (("Dr. Amara Osei", "Dentist"), ("Lena Park", "Hygienist")),
-        {
-            0: ("08:00", "19:00"),
-            1: ("08:00", "19:00"),
-            2: ("08:00", "19:00"),
-            3: ("08:00", "19:00"),
-            4: ("08:00", "16:00"),
-        },
-    ),
-    Clinic(
-        "Northside Physio",
-        "northside-physio",
-        "physiotherapy clinic",
-        "+16475550100",
-        "647",
-        (("Sam Ritter", "Physiotherapist"), ("Priya Nair", "Physiotherapist")),
-        {
-            0: ("07:00", "19:00"),
-            1: ("10:00", "20:00"),
-            2: ("07:00", "19:00"),
-            3: ("10:00", "20:00"),
-            4: ("07:00", "19:00"),
-            5: ("08:00", "13:00"),
-        },
-    ),
-)
 MAX_CLIENTS = 89  # 555-0110..0198 stays inside the range reserved for fiction
-
-
-def fake_phone(area_code: str, i: int) -> str:
-    """NANP 555-0100..0199 numbers are reserved for fictional use."""
-    return f"+1{area_code}555{110 + i:04d}"
 
 
 async def seed(clients_per_tenant: int, reset: bool, sms_number: str | None = None) -> None:
@@ -183,7 +133,7 @@ def main() -> None:
     args = parser.parse_args()
     if not 1 <= args.clients <= MAX_CLIENTS:
         parser.error(f"--clients must be between 1 and {MAX_CLIENTS}")
-    asyncio.run(seed(args.clients, args.reset, args.sms_number))
+    aio.run(seed(args.clients, args.reset, args.sms_number))
 
 
 if __name__ == "__main__":

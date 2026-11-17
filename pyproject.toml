@@ -1,6 +1,6 @@
 [project]
 name = "frontdesk-agent"
-version = "0.4.0"
+version = "0.5.0"
 description = "Multi-tenant LLM agent service for appointment front offices, with human review."
 readme = "README.md"
 requires-python = ">=3.12"
@@ -49,7 +49,7 @@ select = ["E", "F", "I", "UP", "B", "SIM", "ASYNC"]
 [tool.mypy]
 python_version = "3.12"
 strict = true
-files = ["src", "tests", "scripts", "migrations"]
+files = ["src", "tests", "scripts", "migrations", "evals"]
 mypy_path = "src"
 
 [[tool.mypy.overrides]]

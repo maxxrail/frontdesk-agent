@@ -13,8 +13,12 @@ Two more rules live where the action happens, not here: a cancellation inside
 with the escalate_to_human tool.
 
 Keyword rules are blunt on purpose. A false positive costs a human a minute;
-a false negative sends unreviewed medical advice by text. Module 5 measures
-both rates on labelled messages.
+a false negative sends unreviewed medical advice by text. evals/risk_rules.py
+measures both on labelled messages, and tests/test_risk_rules_quality.py
+fails if either gets worse. Tune on evals/golden/risk.jsonl only: the
+held-out set is what keeps the numbers honest. On it the rules still miss
+about one medical message in five, which is why the model's own
+escalate_to_human is the second line, and why it is measured too (ADR 0014).
 """
 
 import re
@@ -40,6 +44,19 @@ _MONEY = [
     r"wrong (bill|charge|amount)",
     r"payment (failed|declined|didn.?t go through)",
     r"\bcredit (back|my|to my)\b",
+    # Added in Module 5 from the tuning set (evals/golden/risk.jsonl). Past
+    # tense ("charged", "billed") is a complaint; "do you charge" is a question.
+    r"\bcharged\b",
+    r"\bbilled\b",
+    r"\bdeclined\b",
+    r"money back|\breverse|\breversal",
+    r"from my (card|account|visa|mastercard|credit card)",
+    r"(got|been|was|sent me an?) invoic",
+    r"(not|n'?t|refuse to) (have to )?pay\b",
+    r"payment plan|pay (it |you )?later|split (it|the (bill|payment))",
+    r"(take|took|remove|drop|cancel) (the |that |this |my )?\S*\s?fee",
+    r"\bfee\b.{0,25}\b(ridiculous|unfair|off\b)",
+    r"(get|give me|have) a discount",
 ]
 
 _MEDICAL = [
@@ -64,6 +81,27 @@ _MEDICAL = [
     r"is (it|this) normal",
     r"\bstitches\b",
     r"can'?t breathe|trouble breathing|hard to swallow",
+    # Added in Module 5 from the tuning set (evals/golden/risk.jsonl).
+    # Pain words in either order, and plain words for hurting.
+    r"\bpain (is |has )?(been )?(so |really |very )?"
+    r"(severe|bad|worse|unbearable|throbbing|sharp|constant|spread|moved|still)",
+    r"(for|with|in|chest|much) (the |so much |a lot of )?pain\b",
+    r"pain ?killers?|\bmeds\b|\bpills?\b|blood thinner",
+    r"\bhurts?\b|\bhurting\b|\bach(e|es|ing)\b|\bthrobb|\bsensitive\b",
+    r"\bdizz|\bfaint|\bnause|\bvomit|feel(ing)? (sick|unwell|ill)\b|\brash\b|\bhives\b",
+    r"\bpregnan|\bdiabet|heart (valve|condition)|pacemaker",
+    r"\bswallow",
+    # Injury verbs only next to a tooth or body part: "my car broke down" is not medical.
+    r"\b(tooth|teeth|crown|filling|implant|bracket|wire|stitches|jaw|knee|ankle|shoulder|"
+    r"back|neck|hip|wrist)\b.{0,25}\b(crack|broke|chip|knocked|fell (out|off)|"
+    r"came (out|off)|popped|gave (out|way)|lock)",
+    r"\b(cracked|broke|chipped|knocked out|lost) (a |my |the )?(tooth|teeth|crown|filling)",
+    r"is it (safe|ok|okay|alright|fine) to\b",
+    r"can i (eat|drink|smoke|exercise|run|swim|work out|brush|floss)\b",
+    r"\bgauze\b|dry socket|\blump\b|\bbump\b",
+    r"should (i|we) (be )?worr|is (that|this|it) from the",
+    r"since (the|my) (session|treatment|surgery|extraction|procedure|injection|"
+    r"filling|implant|crown|sedation|massage)",
 ]
 
 _MONEY_RE = re.compile("|".join(_MONEY), re.IGNORECASE)

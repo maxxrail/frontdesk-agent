@@ -17,13 +17,13 @@ roughly 60 calls x ~900 input tokens: well under $0.10.
 """
 
 import argparse
-import asyncio
 import json
 import statistics
 from datetime import date
 from decimal import Decimal
 from pathlib import Path
 
+from frontdesk_agent import aio
 from frontdesk_agent.answering.service import PolicyAnswerer
 from frontdesk_agent.config import get_settings
 from frontdesk_agent.db.models import LLMCall
@@ -46,14 +46,20 @@ BUSINESS_TYPES = {"maple-dental": "dental office", "northside-physio": "physioth
 DRY_REPLY = json.dumps({"answerable": False, "answer": "", "citations": []})
 
 
-async def run(dry_run: bool) -> dict[str, object]:
+async def run(
+    dry_run: bool, *, client: LLMClient | None = None, database_url: str | None = None
+) -> dict[str, object]:
+    """``client`` and ``database_url`` let the eval suite (evals/run.py) pass
+    its budget-capped client and its own database; alone, this script uses the
+    configured ones."""
     settings = get_settings()
     golden = load_golden(GOLDEN)
-    client: LLMClient = (
-        FakeLLMClient([DRY_REPLY] * len(golden), model=settings.llm_model)
-        if dry_run
-        else get_llm_client()
-    )
+    if client is None:
+        client = (
+            FakeLLMClient([DRY_REPLY] * len(golden), model=settings.llm_model)
+            if dry_run
+            else get_llm_client()
+        )
     embedder = default_embedder()
     answerer = PolicyAnswerer(
         client,
@@ -62,8 +68,8 @@ async def run(dry_run: bool) -> dict[str, object]:
         k=settings.retrieval_k,
         min_similarity=settings.retrieval_min_similarity,
     )
-    engine = make_engine(settings.database_url)
-    rows = []
+    engine = make_engine(database_url or settings.database_url)
+    rows: list[dict[str, object]] = []
     try:
         async with engine.connect() as conn:
             outer = await conn.begin()
@@ -184,7 +190,7 @@ def write(summary: dict[str, object]) -> Path:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--dry-run", action="store_true", help="scripted model, no API calls")
-    summary = asyncio.run(run(parser.parse_args().dry_run))
+    summary = aio.run(run(parser.parse_args().dry_run))
     for k, v in summary.items():
         if k != "rows":
             print(f"{k:>22}: {v}")
