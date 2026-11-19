@@ -62,6 +62,15 @@ class Settings(BaseSettings):
     jwt_secret: SecretStr = SecretStr("")
     jwt_ttl_minutes: int = 60
 
+    # Rate limits (Module 6, ADR 0018), checked before any model call. Per
+    # phone: more texts than this in the window pauses the conversation for a
+    # person. Per tenant: more model calls than this in the window defers
+    # new messages instead of dropping them.
+    rate_phone_messages: int = 12
+    rate_phone_window_s: int = 600
+    rate_tenant_model_calls: int = 1000
+    rate_tenant_window_s: int = 3600
+
     # Background jobs: "redis" for the arq worker, "inline" to run them inside
     # the API process (local development without Redis).
     job_queue: Literal["redis", "inline"] = "inline"

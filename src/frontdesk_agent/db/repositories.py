@@ -352,6 +352,14 @@ class LLMCallRepository(TenantRepository[LLMCall]):
         stmt = self._scoped().order_by(LLMCall.created_at.desc(), LLMCall.id).limit(limit)
         return list((await self._session.execute(stmt)).scalars())
 
+    async def count_since(self, seconds: float) -> int:
+        """Model calls in the last ``seconds`` of database time, for rate limits."""
+        since = func.now() - func.make_interval(0, 0, 0, 0, 0, 0, seconds)
+        stmt = select(func.count()).where(
+            LLMCall.tenant_id == self._tenant_id, LLMCall.created_at > since
+        )
+        return int((await self._session.execute(stmt)).scalar_one())
+
 
 class ConversationRepository(TenantRepository[Conversation]):
     model = Conversation
@@ -410,6 +418,29 @@ class SmsMessageRepository(TenantRepository[SmsMessage]):
         )
         new_id = (await self._session.execute(stmt)).scalar()
         return None if new_id is None else await self.get(new_id)
+
+    async def inbound_count_since(self, conversation_id: uuid.UUID, seconds: float) -> int:
+        """Inbound texts in the last ``seconds`` of database time, counting only
+        those after the latest review decision in the conversation: once a person
+        has looked, the client starts a fresh window."""
+        since = func.now() - func.make_interval(0, 0, 0, 0, 0, 0, seconds)
+        decided = (
+            select(func.max(ReviewItem.updated_at))
+            .where(
+                ReviewItem.tenant_id == self._tenant_id,
+                ReviewItem.conversation_id == conversation_id,
+                ReviewItem.status != ReviewStatus.PENDING,
+            )
+            .scalar_subquery()
+        )
+        stmt = select(func.count()).where(
+            SmsMessage.tenant_id == self._tenant_id,
+            SmsMessage.conversation_id == conversation_id,
+            SmsMessage.direction == MessageDirection.INBOUND,
+            SmsMessage.created_at > since,
+            SmsMessage.created_at > func.coalesce(decided, since),
+        )
+        return int((await self._session.execute(stmt)).scalar_one())
 
     async def in_conversation(
         self, conversation_id: uuid.UUID, *, status: MessageStatus | None = None

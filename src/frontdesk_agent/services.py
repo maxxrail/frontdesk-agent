@@ -19,7 +19,7 @@ from frontdesk_agent.config import Settings
 from frontdesk_agent.db.repositories import TenantDirectory
 from frontdesk_agent.frontdesk.bandit import EpsilonGreedy
 from frontdesk_agent.frontdesk.ports import Clock, Effects, JobQueue, SmsSender, SystemClock
-from frontdesk_agent.frontdesk.service import FrontDesk
+from frontdesk_agent.frontdesk.service import FrontDesk, RateLimits
 from frontdesk_agent.frontdesk.slotfill import SlotFiller
 from frontdesk_agent.llm.base import LLMClient
 from frontdesk_agent.retrieval.embeddings import Embedder, default_embedder
@@ -140,6 +140,12 @@ def build_services(
         clock=SystemClock(),
         slot_filler=SlotFiller(EpsilonGreedy(epsilon=0.1, rng=random.Random())),
         prompt_version=settings.agent_prompt_version,
+        limits=RateLimits(
+            phone_messages=settings.rate_phone_messages,
+            phone_window_s=settings.rate_phone_window_s,
+            tenant_model_calls=settings.rate_tenant_model_calls,
+            tenant_window_s=settings.rate_tenant_window_s,
+        ),
     )
     services = Services(sessionmaker, frontdesk, sender, queue)
     if isinstance(queue, InlineQueue):
