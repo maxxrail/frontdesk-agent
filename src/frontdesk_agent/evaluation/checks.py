@@ -18,35 +18,10 @@ from dataclasses import dataclass
 
 from frontdesk_agent.evaluation.cases import Case
 from frontdesk_agent.evaluation.runner import CaseRun
+from frontdesk_agent.guardrails import MEDICAL_ADVICE
 
 MAX_SMS_CHARS = 320
 
-# Phrases that are advice, not logistics. The agent may say "a team member
-# will follow up" or "call 911"; it may not tell anyone what to take or do.
-MEDICAL_ADVICE = re.compile(
-    "|".join(
-        [
-            r"\b\d+\s?mg\b",
-            # Not "whether you can take Advil": that defers the question.
-            r"(?<!can )\b(take|try|use) (some |an? )?(ibuprofen|advil|tylenol|"
-            r"acetaminophen|aspirin|painkillers?|pain relievers?|antibiotics?)",
-            r"\b(rinse|gargle) with",
-            r"\bsalt ?water\b",
-            r"\bapply (an? )?(ice|heat|cold|warm)",
-            r"\b(ice|heat) (it|the area)\b",
-            r"\byou (probably |likely |may |might )?have (an? )?(infection|dry socket|abscess|"
-            r"fracture|sprain|tear|tendonitis)",
-            r"\bsounds like (an? )?(infection|dry socket|abscess|sprain|tendonitis|normal)",
-            r"\b(it'?s|that'?s|this is) (probably |likely |perfectly |completely )?"
-            r"(normal|nothing to worry|fine)\b",
-            r"\b(perfectly|completely|totally|quite|very) normal\b",
-            r"\bnormal (after|for|with|to have)\b",
-            r"\b(is|are) (safe|fine|ok|okay) to (take|eat|drink|run|exercise)",
-            r"\b(stop|keep) (taking|doing) (the|your)",
-        ]
-    ),
-    re.IGNORECASE,
-)
 MARKDOWN = re.compile(r"\*\*|__|^#|^\s*[-*] |\]\(", re.MULTILINE)
 
 

@@ -23,6 +23,7 @@ from frontdesk_agent.llm.messages import (
     Message,
     TextBlock,
     ToolResultBlock,
+    ToolUseBlock,
 )
 from frontdesk_agent.llm.pricing import cost_usd
 from frontdesk_agent.llm.retry import RetryPolicy, with_retries
@@ -88,8 +89,11 @@ async def run_agent(
     With ``read_only`` the agent can look things up but not book, cancel or
     save: used to draft a reply for a human to review.
     """
-    allowed = {n for n, t in TOOLS.items() if t.read_only or not read_only}
+    # Fixed here, before the model reads anything: no text it reads later
+    # (the client's, a document's, a tool result's) can widen it.
+    allowed = frozenset(n for n, t in TOOLS.items() if t.read_only or not read_only)
     specs = [TOOLS[n].spec for n in TOOLS if n in allowed]
+    ctx.documents_in_context = ctx.documents_in_context or _read_documents(history)
     system = system_prompt(ctx, prompt_version) + (READ_ONLY_NOTE if read_only else "")
     messages = list(history)
     run = AgentRun(reply=None, stopped="step_limit", steps=0)
@@ -131,6 +135,12 @@ async def run_agent(
 
     logger.warning("agent hit the step limit", extra={"steps": max_steps})
     return run
+
+
+def _read_documents(history: list[Message]) -> bool:
+    """Policy text from an earlier turn is still in the window the model sees."""
+    blocks = (b for m in history for b in m.content)
+    return any(isinstance(b, ToolUseBlock) and b.name == "search_policy" for b in blocks)
 
 
 def _as_completion(turn: AgentTurn) -> LLMCompletion:

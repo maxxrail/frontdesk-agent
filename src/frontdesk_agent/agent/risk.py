@@ -69,7 +69,7 @@ _MEDICAL = [
     r"\b(severe|bad|worse|unbearable|throbbing|sharp|constant) "
     r"(tooth|back|knee|neck|jaw|shoulder)? ?pain",
     r"pain (is )?(getting |gotten )?worse",
-    r"\bnumb",
+    r"\bnumb(?!er)",  # not "number"
     r"allergic",
     r"side effects?",
     r"antibiotic",
