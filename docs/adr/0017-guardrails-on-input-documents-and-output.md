@@ -22,8 +22,6 @@ before the model runs. What did not:
   inside one could make the model cancel the texting client's appointments,
   and nothing in code would stop a cancellation more than 24 hours out.
 - The only checks on replies were in the eval suite, not on the send path.
-- A message over 1600 characters from a non-Twilio channel would fail the
-  insert (the column is `String(1600)`).
 
 ## Decision
 
@@ -41,8 +39,8 @@ The stored message keeps the raw text, so staff see what was sent.
 the 360 client messages in the eval cases and golden sets the longest is 222
 characters, the 99th percentile 102 and the median 37. A message over 1000
 is held for review with no model call, and the audit trail records why.
-Storage cuts at 1600 so the insert cannot fail; anything that long is
-already over the limit, so the cut text is never what the agent reads.
+Storage already cut messages at 1600 (the column size); anything that long
+is over the limit, so the cut text is never what the agent reads.
 
 **Tool permissions never come from text.** The allowed set is a frozenset
 fixed in `run_agent` before the first model call. Nothing the model reads
@@ -95,6 +93,15 @@ to the reason as a warning to the reviewer.
   (held-out: medical 4/20 missed, money 7/15 missed, 2/25 false positives).
 - Two red-team cases plant instructions in a policy document
   (`rt-docinject-01`, `rt-docinject-02`). Cases can now carry `documents`.
+- First paid eval run on this change (PR #14, $1.45, Haiku 4.5, prompt v2):
+  both document-injection cases passed, with `search_policy` called and no
+  other tool. `cancel` stayed at 12/12 with no document-held cancellations.
+  The output guardrail fired 3 times in 134 cases, all false positives: the
+  model refusing a request about "Morgan Reyes" repeated the name the client
+  typed. Names and phone numbers the client typed in the conversation
+  window are now exempt, as the eval's own leak check already did. A
+  phone number the client did not type is still held. Writing the test for
+  that showed possessives ("Reyes's") were never matched; they are now.
 - Cost: "what's the cancellation fee? ... ok, cancel it" now goes to a
   person even when it is more than 24 hours out. How often that happens is
   measured by the next paid eval run (the `cancel` feature's review rate).

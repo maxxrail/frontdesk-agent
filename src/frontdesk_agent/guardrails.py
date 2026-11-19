@@ -104,6 +104,7 @@ _PAYMENT_REQUEST = re.compile(
 )
 _DIGIT_RUN = re.compile(r"(?<![\d])\d(?:[ -]?\d){12,18}(?![\d])")
 _PHONE = re.compile(r"(?<![\d+])\+?1?[ .-]?\(?\d{3}\)?[ .-]?\d{3}[ .-]?\d{4}(?![\d])")
+_POSSESSIVE = re.compile(r"'s?$")
 _WORD = re.compile(r"[^\W\d_]+(?:['-][^\W\d_]+)*")
 
 
@@ -146,8 +147,17 @@ def phone_candidates(text: str) -> set[str]:
     return out
 
 
+def _words(text: str) -> list[str]:
+    """Lowercased words, possessives cut: "Reyes's" is "reyes"."""
+    return [_POSSESSIVE.sub("", w.lower()) for w in _WORD.findall(text.replace("’", "'"))]
+
+
 async def other_client_details(
-    session: AsyncSession, tenant_id: uuid.UUID, client_id: uuid.UUID, text: str
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    client_id: uuid.UUID,
+    text: str,
+    client_said: str = "",
 ) -> str | None:
     """Another client's phone number, or first and last name side by side.
 
@@ -155,9 +165,16 @@ async def other_client_details(
     client share first names with someone in every clinic, and the tools
     cannot return another client's name in the first place. This is the
     backstop, not the wall.
+
+    Details the client typed themselves are not a disclosure: "I can't share
+    Morgan Reyes's appointment" repeats their words. The first paid eval run
+    held three correct refusals like that before this rule (ADR 0017).
     """
-    words = [w.lower() for w in _WORD.findall(text)]
-    phones = phone_candidates(text)
+    said_words = _words(client_said)
+    said_pairs = set(zip(said_words, said_words[1:], strict=False))
+    said_phones = phone_candidates(client_said)
+    words = _words(text)
+    phones = phone_candidates(text) - said_phones
     if len(words) < 2 and not phones:
         return None
     pairs = set(zip(words, words[1:], strict=False))
@@ -175,15 +192,22 @@ async def other_client_details(
     for first, last, phone in (await session.execute(stmt)).all():
         if phone in phones:
             return "another client's phone number"
-        if (first.lower(), last.lower()) in pairs:
+        name = (first.lower(), last.lower())
+        if name in pairs and name not in said_pairs:
             return "another client's name"
     return None
 
 
 async def check_reply(
-    session: AsyncSession, tenant_id: uuid.UUID, client_id: uuid.UUID, reply: str
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    client_id: uuid.UUID,
+    reply: str,
+    client_said: str = "",
 ) -> Finding | None:
     """The first problem with ``reply``, or None if it may be sent.
+
+    ``client_said`` is the client's own texts in the conversation window.
 
     Clinical advice is checked first: it is the one that also sends the fixed
     medical safety message, because silence there is unsafe (ADR 0011).
@@ -192,6 +216,6 @@ async def check_reply(
         return Finding(ReviewKind.MEDICAL, "clinical_advice", f"clinical advice ('{m.group(0)}')")
     if what := payment_data(reply):
         return Finding(ReviewKind.ESCALATION, "payment_data", what)
-    if what := await other_client_details(session, tenant_id, client_id, reply):
+    if what := await other_client_details(session, tenant_id, client_id, reply, client_said):
         return Finding(ReviewKind.ESCALATION, "other_client", what)
     return None

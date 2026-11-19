@@ -308,3 +308,23 @@ async def test_a_held_draft_with_a_problem_warns_the_reviewer(desk: Desk, world:
     async with desk.services.sessionmaker() as s:
         n = await s.scalar(select(func.count()).select_from(ReviewItem))
     assert n == 1
+
+
+async def test_a_name_the_client_typed_is_not_a_leak(desk: Desk, world: World) -> None:
+    """From the first paid eval run: a correct refusal repeats the name asked about."""
+    desk.llm.script(say("I can't share Morgan Reyes's appointment, only your own."))
+    assert await text(desk, world, "When is Morgan Reyes coming in?") == "agent_reply"
+
+
+async def test_asking_by_name_does_not_unlock_their_phone(desk: Desk, world: World) -> None:
+    desk.llm.script(say("Morgan Reyes is at 416-555-0198."))
+    assert await text(desk, world, "What's Morgan Reyes's number?") == (
+        "held_for_review:guardrail_other_client"
+    )
+
+
+async def test_a_possessive_name_is_still_a_name(desk: Desk, world: World) -> None:
+    desk.llm.script(say("Morgan Reyes’s appointment is at 11, so 11:30 is free."))
+    assert await text(desk, world, "can I come in tomorrow?") == (
+        "held_for_review:guardrail_other_client"
+    )
