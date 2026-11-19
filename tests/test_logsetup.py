@@ -148,7 +148,9 @@ async def test_searching_the_logs_for_seeded_phone_numbers_finds_nothing(
     desk.llm.script(
         [call("check_availability", date="2030-01-07")],
         [call("book_appointment", provider_id=str(world.provider_id), starts_at=local("10:00"))],
-        say("Booked for Monday at 10:00 AM."),
+        # A phone number in the reply sends it, as a query parameter, through
+        # the output guardrail's lookup of other clients (Module 6).
+        say("Booked for Monday at 10:00 AM. We'll text 416-555-0111 the day before."),
     )
     await text(desk, world, "can I come Monday at 10? or call me back on 416-555-0111")
     desk.llm.script(say("Swelling can be normal."))

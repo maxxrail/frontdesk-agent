@@ -99,6 +99,28 @@ jobs:
           name: retrieval-report
           path: evals/reports/
 
+  security:
+    name: Dependency audit and secret scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # scan every commit, not just the last
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+
+      - name: pip-audit (known vulnerabilities in locked dependencies)
+        # Audits exactly what uv.lock pins, runtime and dev, without installing.
+        run: |
+          uv export --format requirements-txt --no-emit-project --extra dev > /tmp/req.txt
+          uvx pip-audit@2.9.0 -r /tmp/req.txt --disable-pip --progress-spinner off
+
+      - name: gitleaks (secrets in any commit)
+        # Reviewed false positives are listed in .gitleaksignore.
+        run: |
+          docker run --rm -v "$PWD:/repo" ghcr.io/gitleaks/gitleaks:v8.18.4             detect --source /repo --redact --no-banner
+
   docker:
     name: Docker build
     runs-on: ubuntu-latest
