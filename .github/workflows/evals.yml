@@ -121,7 +121,7 @@ jobs:
 
       - name: Keep the results file
         if: always() && hashFiles('eval-results.json') != ''
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: eval-results
           path: eval-results.json
