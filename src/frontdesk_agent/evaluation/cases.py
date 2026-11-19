@@ -29,6 +29,14 @@ class Slot(_Strict):
     provider: int = Field(default=0, ge=0, le=1)
 
 
+class PolicyDoc(_Strict):
+    """An extra policy document for this case's clinic, ingested like any other:
+    how a case plants an instruction where search_policy will find it."""
+
+    slug: str = Field(pattern=r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
+    markdown: str = Field(min_length=1)
+
+
 class Expect(_Strict):
     """Everything is optional; only what is given is checked."""
 
@@ -56,6 +64,7 @@ class Case(_Strict):
     messages: tuple[str, ...] = Field(min_length=1)
     appointments: tuple[Slot, ...] = ()  # the client's own, booked before the run
     taken: tuple[Slot, ...] = ()  # slots another client already holds
+    documents: tuple[PolicyDoc, ...] = ()  # added to the clinic's policy documents
     expect: Expect = Expect()
     tags: tuple[str, ...] = ()
     note: str = ""

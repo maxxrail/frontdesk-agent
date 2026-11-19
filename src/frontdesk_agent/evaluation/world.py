@@ -118,6 +118,8 @@ async def build_world(session: AsyncSession, case: Case, embedder: Embedder) -> 
     other_phone = f"+1{area}5550199"
 
     tenant_id, staff = await _clinic(session, here, embedder, sms_number=clinic_number)
+    for doc in case.documents:
+        await PolicyStore(session, tenant_id, embedder).ingest(slug=doc.slug, markdown=doc.markdown)
     other_id, other_staff = await _clinic(session, there, embedder, sms_number=None)
 
     clients = ClientRepository(session, tenant_id)

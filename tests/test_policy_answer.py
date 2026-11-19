@@ -6,7 +6,6 @@ measured by evals/policy_answers.py against the golden set (costs cents).
 """
 
 import json
-import uuid
 from collections.abc import AsyncIterator
 from pathlib import Path
 
@@ -15,7 +14,7 @@ import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from frontdesk_agent.answering.service import REFUSAL_TEXT, PolicyAnswerer
-from frontdesk_agent.db.models import Tenant
+from frontdesk_agent.db.models import Role, Tenant
 from frontdesk_agent.db.repositories import LLMCallRepository
 from frontdesk_agent.dependencies import get_answerer
 from frontdesk_agent.llm.base import LLMInvalidOutputError
@@ -25,6 +24,7 @@ from frontdesk_agent.main import create_app
 from frontdesk_agent.retrieval.embeddings import default_embedder
 from frontdesk_agent.retrieval.ingest import ingest_directory
 from frontdesk_agent.retrieval.store import PolicyStore
+from tests.conftest import act_as
 from tests.factories import make_tenant
 
 POLICIES = Path(__file__).resolve().parent.parent / "data" / "policies"
@@ -142,7 +142,7 @@ async def test_prompt_only_contains_this_tenants_policies(session: AsyncSession)
 
 @pytest.fixture
 async def policy_api(
-    db_url: str, dental: Tenant
+    db_url: str, dental: Tenant, session: AsyncSession
 ) -> AsyncIterator[tuple[httpx.AsyncClient, FakeLLMClient]]:
     """An HTTP client whose app uses a scripted model; tests queue its replies."""
     fake = FakeLLMClient(model=HAIKU)
@@ -151,21 +151,20 @@ async def policy_api(
     async with app.router.lifespan_context(app):
         transport = httpx.ASGITransport(app=app)
         async with httpx.AsyncClient(transport=transport, base_url="http://t") as client:
+            await act_as(client, session, dental.id)  # an admin: it uploads documents too
             yield client, fake
 
 
 async def test_http_answer_search_and_document_upload(
-    policy_api: tuple[httpx.AsyncClient, FakeLLMClient], dental: Tenant
+    policy_api: tuple[httpx.AsyncClient, FakeLLMClient], dental: Tenant, session: AsyncSession
 ) -> None:
     client, fake = policy_api
     fake.queue(reply(True, "We open at 8 a.m.", ["C1"]))
-    base = f"/v1/tenants/{dental.id}/policy"
+    base = "/v1/policy"
 
     r = await client.post(f"{base}/answer", json={"question": "when do you open"})
     assert r.status_code == 200 and r.json()["answerable"] is True
     assert (await client.post(f"{base}/answer", json={"question": "   "})).status_code == 422
-    unknown = f"/v1/tenants/{uuid.uuid4()}/policy/answer"
-    assert (await client.post(unknown, json={"question": "hours?"})).status_code == 404
 
     hits = (await client.post(f"{base}/search", json={"question": "parking"})).json()
     assert hits[0]["document_slug"] == "location-and-parking"
@@ -177,11 +176,15 @@ async def test_http_answer_search_and_document_upload(
     hits = (await client.post(f"{base}/search", json={"question": "implant cost"})).json()
     assert hits[0]["document_slug"] == "implants"
 
+    # Documents steer what the agent tells clients: reviewers cannot change them.
+    await act_as(client, session, dental.id, Role.REVIEWER)
+    assert (await client.put(f"{base}/documents", json=doc)).status_code == 403
+
 
 async def test_http_model_garbage_is_502(
     policy_api: tuple[httpx.AsyncClient, FakeLLMClient], dental: Tenant
 ) -> None:
     client, fake = policy_api
     fake.queue("garbage", "more garbage")
-    r = await client.post(f"/v1/tenants/{dental.id}/policy/answer", json={"question": "fee?"})
+    r = await client.post("/v1/policy/answer", json={"question": "fee?"})
     assert r.status_code == 502

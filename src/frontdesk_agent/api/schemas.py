@@ -31,15 +31,6 @@ class TenantIn(BaseModel):
     sms_number: str | None = Field(default=None, pattern=E164)
 
 
-class TenantOut(_Out):
-    id: uuid.UUID
-    name: str
-    slug: str | None
-    business_type: str
-    timezone: str
-    sms_number: str | None
-
-
 class ClientOut(_Out):
     id: uuid.UUID
     first_name: str

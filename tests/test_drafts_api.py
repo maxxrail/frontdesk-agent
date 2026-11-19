@@ -1,11 +1,14 @@
 """Endpoint tests, with the fake client injected via dependency override."""
 
 import json
+import uuid
 from collections.abc import Iterator
 
 import pytest
 from fastapi.testclient import TestClient
 
+from frontdesk_agent.api.auth import Principal, current_principal
+from frontdesk_agent.db.models import Role
 from frontdesk_agent.dependencies import get_drafter
 from frontdesk_agent.drafting.service import ReminderDrafter
 from frontdesk_agent.llm.base import LLMServerError
@@ -34,10 +37,16 @@ PAYLOAD = {
 NO_RETRY = RetryPolicy(max_attempts=1)
 
 
+# These tests are about drafting, not auth (tests/test_auth.py): a fixed
+# caller stands in for the credential check.
+CALLER = Principal(uuid.uuid4(), Role.REVIEWER, "key:test")
+
+
 def client_with(*responses: str | Exception) -> Iterator[TestClient]:
     app = create_app()
     fake = FakeLLMClient(list(responses))
     app.dependency_overrides[get_drafter] = lambda: ReminderDrafter(fake, NO_RETRY)
+    app.dependency_overrides[current_principal] = lambda: CALLER
     with TestClient(app) as test_client:
         yield test_client
 
@@ -45,6 +54,12 @@ def client_with(*responses: str | Exception) -> Iterator[TestClient]:
 @pytest.fixture
 def ok_client() -> Iterator[TestClient]:
     yield from client_with(VALID_JSON)
+
+
+def test_drafting_needs_a_credential() -> None:
+    """It spends money on a model call: never anonymously."""
+    with TestClient(create_app()) as anonymous:
+        assert anonymous.post("/v1/drafts/reminder", json=PAYLOAD).status_code == 401
 
 
 def test_returns_draft(ok_client: TestClient) -> None:

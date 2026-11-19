@@ -6,19 +6,27 @@ Order of checks for every inbound message (ADR 0011):
 2. STOP / START keywords: update consent, no reply.
 3. An open waitlist offer and a YES or NO: the slot-fill workflow answers.
 4. Conversation paused for review: hold the message until a decision.
+   Rate limits: too many texts from this phone pauses the conversation for
+   review; too many model calls for the tenant defers the message.
+   A message over the length limit goes to review without a model call.
 5. Risk policy flags money or medical: the agent drafts a reply with
    read-only tools, a review item holds it, nothing is sent (medical gets
    a fixed safety message).
 6. Otherwise the agent runs with all tools. A held action (late
    cancellation, escalation) or the step limit turns into a review item
    instead of a sent reply.
+7. The output guardrail checks the reply last: another client's details,
+   card data or clinical advice turn it into a review item, not a text.
+
+The risk rules and the model see the message after ``clean_untrusted``
+(guardrails.py); the stored message keeps the raw text for staff.
 
 Texts and jobs are collected in Effects and only happen after commit.
 """
 
 import logging
 import uuid
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -40,8 +48,10 @@ from frontdesk_agent.db.models import (
 )
 from frontdesk_agent.db.repositories import (
     AppointmentRepository,
+    AuditRepository,
     ClientRepository,
     ConversationRepository,
+    LLMCallRepository,
     NotFoundError,
     ReviewRepository,
     SlotOfferRepository,
@@ -50,6 +60,13 @@ from frontdesk_agent.db.repositories import (
 )
 from frontdesk_agent.frontdesk.ports import Clock, Effects
 from frontdesk_agent.frontdesk.slotfill import SlotFiller, parse_reply
+from frontdesk_agent.guardrails import (
+    MAX_INBOUND_CHARS,
+    Finding,
+    check_reply,
+    clean_untrusted,
+    inbound_too_long,
+)
 from frontdesk_agent.llm.base import LLMClient
 from frontdesk_agent.llm.messages import Message, TextBlock
 from frontdesk_agent.retrieval.embeddings import Embedder
@@ -64,6 +81,19 @@ START_WORDS = {"start", "unstop", "yes start"}
 
 Outcome = str  # short label for logs and tests: "agent_reply", "held_for_review", ...
 
+# How long a message waits when its tenant is over the model-call limit.
+TENANT_LIMIT_RETRY_S = 60
+
+
+@dataclass(frozen=True, slots=True)
+class RateLimits:
+    """Defaults match Settings; tests pass small ones (ADR 0018)."""
+
+    phone_messages: int = 12
+    phone_window_s: int = 600
+    tenant_model_calls: int = 1000
+    tenant_window_s: int = 3600
+
 
 @dataclass
 class FrontDesk:
@@ -73,6 +103,7 @@ class FrontDesk:
     slot_filler: SlotFiller
     # Which prompts/agent/<version>.md to run: a setting, so evals can compare versions.
     prompt_version: str = PROMPT_VERSION
+    limits: RateLimits = field(default_factory=RateLimits)
 
     # -- inbound -----------------------------------------------------------
 
@@ -114,21 +145,58 @@ class FrontDesk:
             msg.status = MessageStatus.HELD
             return "held_while_paused"
 
+        lim = self.limits
+        recent = await SmsMessageRepository(session, tenant.id).inbound_count_since(
+            convo.id, lim.phone_window_s
+        )
+        if recent > lim.phone_messages:
+            reason = (
+                f"{recent} texts in {lim.phone_window_s // 60} minutes, over the limit of"
+                f" {lim.phone_messages}; the agent is paused for this conversation."
+            )
+            self._hold(session, convo, msg, HeldAction(ReviewKind.ESCALATION, reason), None)
+            await _audit_guardrail(session, convo, msg, "rate_limit", reason)
+            return "held_for_review:rate_limit"
+        calls = await LLMCallRepository(session, tenant.id).count_since(lim.tenant_window_s)
+        if calls >= lim.tenant_model_calls:
+            # Deferred, not dropped and not held: the client did nothing wrong,
+            # and one review item per message would bury the queue.
+            logger.warning("tenant over model-call limit", extra={"calls": calls})
+            effects.job(
+                "handle_inbound",
+                defer_seconds=TENANT_LIMIT_RETRY_S,
+                tenant_id=str(tenant.id),
+                message_id=str(msg.id),
+            )
+            return "rate_limited:tenant"
+
+        if inbound_too_long(msg.body):
+            reason = (
+                f"Message is {len(msg.body)} characters, over the {MAX_INBOUND_CHARS} limit;"
+                " the agent did not read it."
+            )
+            self._hold(session, convo, msg, HeldAction(ReviewKind.ESCALATION, reason), None)
+            await _audit_guardrail(session, convo, msg, "too_long", reason)
+            return "held_for_review:too_long"
+
+        body = clean_untrusted(msg.body)
         history = [Message.from_json(m) for m in convo.transcript]
         # Merge, not append: after a step-limit stop the history ends with tool
         # results (a user message), and roles must alternate.
-        history = _append(history, Message.user_text(msg.body))
+        history = _append(history, Message.user_text(body))
         ctx = ToolContext(
             session, tenant, client, convo, self.embedder, now, msg.provider_sid or str(msg.id)
         )
 
-        flag = classify(msg.body)
+        flag = classify(body)
         if flag is not None:
             run = await run_agent(
                 self.llm, ctx, history, read_only=True, prompt_version=self.prompt_version
             )
             self._save(convo, history, run)
-            self._hold(session, convo, msg, HeldAction(flag.kind, flag.reason), run.reply)
+            held = HeldAction(flag.kind, flag.reason)
+            held = await _flag_draft(session, convo, msg, client, held, run.reply, history)
+            self._hold(session, convo, msg, held, run.reply)
             if flag.kind is ReviewKind.MEDICAL:
                 self._text(effects, tenant, convo, client, MEDICAL_HOLDING_MESSAGE)
             return f"held_for_review:{flag.kind.value}"
@@ -139,7 +207,10 @@ class FrontDesk:
             self._queue_slot_fill(effects, tenant, appt, client)
 
         if ctx.held:
-            self._hold(session, convo, msg, _combine(ctx.held), run.reply)
+            held = await _flag_draft(
+                session, convo, msg, client, _combine(ctx.held), run.reply, history
+            )
+            self._hold(session, convo, msg, held, run.reply)
             return f"held_for_review:{ctx.held[0].kind.value}"
         if run.stopped == "step_limit" or not run.reply:
             self._hold(
@@ -152,6 +223,16 @@ class FrontDesk:
                 None,
             )
             return "held_for_review:step_limit"
+
+        said = _client_said(history)
+        finding = await check_reply(session, tenant.id, client.id, run.reply, said)
+        if finding is not None:
+            reason = f"Reply held by the output guardrail: it contained {finding.reason}."
+            self._hold(session, convo, msg, HeldAction(finding.kind, reason), run.reply)
+            await _audit_guardrail(session, convo, msg, finding.rule, reason)
+            if finding.kind is ReviewKind.MEDICAL:
+                self._text(effects, tenant, convo, client, MEDICAL_HOLDING_MESSAGE)
+            return f"held_for_review:guardrail_{finding.rule}"
 
         self._text(effects, tenant, convo, client, run.reply)
         msg.status = MessageStatus.HANDLED
@@ -202,6 +283,19 @@ class FrontDesk:
         item.final_reply = text or None
         item.decided_by = reviewer
         item.decided_at = now
+        await AuditRepository(session, tenant.id).record(
+            kind="review_decision",
+            actor=reviewer[:120],
+            subject=item.kind.value,
+            outcome=item.status.value,
+            conversation_id=convo.id,
+            ref_id=item.id,
+            detail={
+                "action": (item.action or {}).get("type"),
+                "reply_edited": reply is not None and reply.strip() != (item.proposed_reply or ""),
+                "replied": bool(text),
+            },
+        )
 
         transcript = [Message.from_json(m) for m in convo.transcript]
         transcript = _append(transcript, Message.user_text(note))
@@ -310,6 +404,54 @@ class ReviewAlreadyDecidedError(ValueError):
 
 class ReviewNeedsReplyError(ValueError):
     pass
+
+
+async def _flag_draft(
+    session: AsyncSession,
+    convo: Conversation,
+    msg: SmsMessage,
+    client: Client,
+    held: HeldAction,
+    draft: str | None,
+    history: list[Message],
+) -> HeldAction:
+    """A draft going to review anyway is checked too, so the reviewer is warned
+    before approving it as written."""
+    said = _client_said(history)
+    finding: Finding | None = (
+        await check_reply(session, convo.tenant_id, client.id, draft, said) if draft else None
+    )
+    if finding is None:
+        return held
+    note = f"Warning: the draft contains {finding.reason}."
+    await _audit_guardrail(session, convo, msg, finding.rule, note)
+    return HeldAction(held.kind, f"{held.reason} {note}", held.action)
+
+
+def _client_said(history: list[Message]) -> str:
+    """The client's own words in the window: user text that is not a staff note."""
+    return "\n".join(
+        b.text
+        for m in history
+        if m.role == "user"
+        for b in m.content
+        if isinstance(b, TextBlock) and not b.text.startswith("[Staff note]")
+    )
+
+
+async def _audit_guardrail(
+    session: AsyncSession, convo: Conversation, msg: SmsMessage, rule: str, reason: str
+) -> None:
+    """The reason names the rule and the matched phrase, never the reply text."""
+    await AuditRepository(session, convo.tenant_id).record(
+        kind="guardrail",
+        actor="system",
+        subject=rule,
+        outcome="held",
+        conversation_id=convo.id,
+        ref_id=msg.id,
+        detail={"reason": reason[:300]},
+    )
 
 
 def _combine(held: list[HeldAction]) -> HeldAction:

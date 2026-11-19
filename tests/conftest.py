@@ -12,6 +12,7 @@ default) because every test truncates it.
 """
 
 import os
+import uuid
 from collections.abc import AsyncIterator, Iterator
 
 import httpx
@@ -24,8 +25,16 @@ from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
 from frontdesk_agent import aio
 from frontdesk_agent.config import get_settings
+from frontdesk_agent.db.models import Role
+from frontdesk_agent.db.repositories import ApiKeyRepository
 from frontdesk_agent.db.session import make_engine, make_sessionmaker
 from frontdesk_agent.main import create_app
+from frontdesk_agent.security import new_api_key
+
+# A throwaway signing key, so the app starts in tests (it refuses to without
+# one). Settings are cached at import, hence the cache_clear.
+os.environ.setdefault("FDA_JWT_SECRET", "test-only-not-a-secret-" + "x" * 32)
+get_settings.cache_clear()
 
 aio.use_selector_loop_policy()
 
@@ -111,3 +120,17 @@ async def api(db_url: str, session: AsyncSession) -> AsyncIterator[httpx.AsyncCl
         transport = httpx.ASGITransport(app=app)
         async with httpx.AsyncClient(transport=transport, base_url="http://test") as c:
             yield c
+
+
+async def act_as(
+    api: httpx.AsyncClient, session: AsyncSession, tenant_id: uuid.UUID, role: Role = Role.ADMIN
+) -> str:
+    """Make ``api`` call as a real API key of ``tenant_id`` with ``role``;
+    returns the key."""
+    new = new_api_key()
+    await ApiKeyRepository(session, tenant_id).create(
+        name=f"test-{role.value}", prefix=new.prefix, key_hash=new.digest, role=role
+    )
+    await session.commit()
+    api.headers["X-API-Key"] = new.key
+    return new.key

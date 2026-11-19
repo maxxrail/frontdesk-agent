@@ -1,4 +1,7 @@
-"""The tenant-scoped HTTP API: status codes, validation, pagination."""
+"""The tenant data API: status codes, validation, pagination.
+
+The tenant comes from the API key (tests/conftest.py act_as), never the URL.
+"""
 
 import uuid
 
@@ -7,31 +10,13 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from frontdesk_agent.db.models import Role
+from tests.conftest import act_as
 from tests.factories import HALF_HOUR, SLOT, make_client, make_provider, make_tenant
 
 
-async def test_create_tenant(api: httpx.AsyncClient) -> None:
-    r = await api.post(
-        "/v1/tenants",
-        json={
-            "name": "Maple Dental",
-            "business_type": "dental office",
-            "sms_number": "+14165550100",
-        },
-    )
-    assert r.status_code == 201
-    assert r.json()["timezone"] == "America/Toronto"
-
-
-async def test_sms_number_must_be_e164(api: httpx.AsyncClient) -> None:
-    r = await api.post(
-        "/v1/tenants", json={"name": "X", "business_type": "y", "sms_number": "416-555-0100"}
-    )
-    assert r.status_code == 422
-
-
-async def test_unknown_tenant_is_404(api: httpx.AsyncClient) -> None:
-    assert (await api.get(f"/v1/tenants/{uuid.uuid4()}/clients")).status_code == 404
+async def test_tenant_data_needs_a_credential(api: httpx.AsyncClient) -> None:
+    assert (await api.get("/v1/clients")).status_code == 401
 
 
 async def test_clients_paginate(api: httpx.AsyncClient, session: AsyncSession) -> None:
@@ -39,18 +24,20 @@ async def test_clients_paginate(api: httpx.AsyncClient, session: AsyncSession) -
     for _ in range(5):
         await make_client(session, tenant)
     await session.commit()
+    await act_as(api, session, tenant.id, Role.REVIEWER)
 
-    page1 = (await api.get(f"/v1/tenants/{tenant.id}/clients?limit=2")).json()
-    page3 = (await api.get(f"/v1/tenants/{tenant.id}/clients?limit=2&offset=4")).json()
+    page1 = (await api.get("/v1/clients?limit=2")).json()
+    page3 = (await api.get("/v1/clients?limit=2&offset=4")).json()
     assert page1["total"] == 5 and len(page1["items"]) == 2 and len(page3["items"]) == 1
-    assert (await api.get(f"/v1/tenants/{tenant.id}/clients?limit=500")).status_code == 422
+    assert (await api.get("/v1/clients?limit=500")).status_code == 422
 
 
 async def test_booking_validation_and_cancel(api: httpx.AsyncClient, session: AsyncSession) -> None:
     tenant = await make_tenant(session)
     client, provider = await make_client(session, tenant), await make_provider(session, tenant)
     await session.commit()
-    url = f"/v1/tenants/{tenant.id}/appointments"
+    await act_as(api, session, tenant.id)
+    url = "/v1/appointments"
     good = {
         "client_id": str(client.id),
         "provider_id": str(provider.id),
@@ -98,7 +85,8 @@ async def test_missing_api_key_is_503_not_500(
     try:
         tenant = await make_tenant(session)
         await session.commit()
-        r = await api.post(f"/v1/tenants/{tenant.id}/policy/answer", json={"question": "fee?"})
+        await act_as(api, session, tenant.id)
+        r = await api.post("/v1/policy/answer", json={"question": "fee?"})
         assert r.status_code == 503 and "not configured" in r.json()["detail"]
         draft = {
             "business_name": "Maple Dental",

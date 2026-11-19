@@ -11,7 +11,7 @@ import httpx
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from frontdesk_agent.db.models import Appointment, Client, Tenant, WaitlistEntry
+from frontdesk_agent.db.models import Appointment, Client, Role, Tenant, WaitlistEntry
 from frontdesk_agent.db.repositories import (
     AppointmentRepository,
     ClientRepository,
@@ -20,6 +20,7 @@ from frontdesk_agent.db.repositories import (
     WaitlistRepository,
 )
 from frontdesk_agent.llm.base import LLMCompletion
+from tests.conftest import act_as
 from tests.factories import HALF_HOUR, SLOT, make_client, make_provider, make_tenant
 
 
@@ -120,25 +121,45 @@ async def test_a_forged_tenant_id_is_overwritten(session: AsyncSession, world: W
     assert await ClientRepository(session, world.a.id).by_phone("+14165550199") is None
 
 
-async def test_api_lists_only_the_requested_tenant(api: httpx.AsyncClient, world: World) -> None:
-    body = (await api.get(f"/v1/tenants/{world.b.id}/clients")).json()
+async def test_api_lists_only_the_callers_tenant(
+    api: httpx.AsyncClient, session: AsyncSession, world: World
+) -> None:
+    await act_as(api, session, world.b.id, Role.REVIEWER)
+    body = (await api.get("/v1/clients")).json()
     assert body["total"] == 1
     assert world.a_client.id not in {item["id"] for item in body["items"]}
 
 
-async def test_api_cannot_cancel_through_another_tenant(
-    api: httpx.AsyncClient, world: World
+async def test_a_request_cannot_name_another_tenant(
+    api: httpx.AsyncClient, session: AsyncSession, world: World
 ) -> None:
-    r = await api.post(f"/v1/tenants/{world.b.id}/appointments/{world.a_appt.id}/cancel")
+    """The tenant comes only from the credential (ADR 0016): the old
+    tenant-in-URL routes are gone, and a tenant_id parameter is ignored."""
+    await act_as(api, session, world.b.id, Role.REVIEWER)
+    assert (await api.get(f"/v1/tenants/{world.a.id}/clients")).status_code == 404
+    body = (await api.get("/v1/clients", params={"tenant_id": str(world.a.id)})).json()
+    assert world.a_client.id not in {item["id"] for item in body["items"]}
+
+
+async def test_api_cannot_cancel_through_another_tenant(
+    api: httpx.AsyncClient, session: AsyncSession, world: World
+) -> None:
+    await act_as(api, session, world.b.id)
+    r = await api.post(f"/v1/appointments/{world.a_appt.id}/cancel")
     assert r.status_code == 404
+    await act_as(api, session, world.a.id)
     r = await api.get(
-        f"/v1/tenants/{world.a.id}/appointments",
+        "/v1/appointments",
         params={"start": SLOT.isoformat(), "end": (SLOT + HALF_HOUR).isoformat()},
     )
     assert r.json()[0]["status"] == "booked"
 
 
-async def test_llm_calls_endpoint_is_scoped(api: httpx.AsyncClient, world: World) -> None:
-    assert (await api.get(f"/v1/tenants/{world.b.id}/llm-calls")).json() == []
-    calls = (await api.get(f"/v1/tenants/{world.a.id}/llm-calls")).json()
+async def test_llm_calls_endpoint_is_scoped(
+    api: httpx.AsyncClient, session: AsyncSession, world: World
+) -> None:
+    await act_as(api, session, world.b.id)
+    assert (await api.get("/v1/llm-calls")).json() == []
+    await act_as(api, session, world.a.id)
+    calls = (await api.get("/v1/llm-calls")).json()
     assert len(calls) == 1 and calls[0]["prompt_name"] == "p"

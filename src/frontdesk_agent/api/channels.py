@@ -13,7 +13,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 
-from frontdesk_agent.api.tenants import Session
+from frontdesk_agent.api.auth import Session
 from frontdesk_agent.channels.twilio import signature_is_valid
 from frontdesk_agent.config import get_settings
 from frontdesk_agent.db.repositories import TenantDirectory

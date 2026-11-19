@@ -1,0 +1,4 @@
+# Reviewed false positives only. Each line is a gitleaks fingerprint.
+# .env.example has an empty FDA_JWT_SECRET=; the generic-api-key rule reads
+# the next line (FDA_JWT_TTL_MINUTES=60) as its value.
+3cf6cda391b0317b1839f5f9ac7a0421310dc545:.env.example:generic-api-key:35

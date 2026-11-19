@@ -14,11 +14,13 @@ from arq.connections import RedisSettings
 from frontdesk_agent.config import get_settings
 from frontdesk_agent.db.session import make_engine, make_sessionmaker
 from frontdesk_agent.dependencies import get_llm_client
+from frontdesk_agent.logsetup import configure_logging
 from frontdesk_agent.services import Services, build_services, run_job
 
 
 async def startup(ctx: dict[str, Any]) -> None:
     settings = get_settings()
+    configure_logging(settings.log_level)
     engine = make_engine(settings.database_url)
     ctx["engine"] = engine
     ctx["services"] = build_services(settings, make_sessionmaker(engine), get_llm_client())

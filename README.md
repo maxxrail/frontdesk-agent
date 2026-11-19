@@ -8,12 +8,16 @@ from a waitlist, and routes anything risky to a human for approval.
 Every model call is logged with tokens, cost and latency. Every prompt change is
 gated by an eval suite in CI.
 
-**Status:** Module 4 of 9 complete. Clients text the clinic; an agent answers
+**Status:** Module 6 of 9 complete. Clients text the clinic; an agent answers
 policy questions from the clinic's own documents, finds open slots, books and
 cancels, and hands anything risky to a person: late cancellations, money,
 and medical questions wait in a review queue and send nothing until approved.
 When a slot frees up, waitlisted clients are offered it one at a time, ranked
-by a bandit that learns who answers fastest.
+by a bandit that learns who answers fastest. Staff sign in with per-tenant
+API keys or logins; guardrails clean what reaches the model and check every
+reply before it is sent; logs never hold a phone number or name. The
+[threat model](docs/threat-model.md) walks the OWASP Top 10 for LLM
+applications and lists the risks accepted.
 
 | Measured | |
 | --- | --- |
@@ -21,7 +25,10 @@ by a bandit that learns who answers fastest.
 | Agent step limit | 6 model calls, tested with a model that never stops |
 | Forged webhooks rejected | 4 of 4 forgery kinds, 403 |
 | Waitlist bandit vs first-come-first-served (simulated) | 0.654 vs 0.192 mean reward |
-| Tests | 161 |
+| Eval suite, real model (PR #14) | 113 of 134 cases, red team 38 of 42, $1.45 a run |
+| Instructions planted in a policy document | 2 of 2 ignored by the model; cancellations held regardless |
+| Guarantees broken on purpose to prove a test fails | 21 in Module 6 |
+| Tests | 449 |
 
 How these were chosen, including why hybrid search lost: [ADR 0008](docs/adr/0008-retrieval-chosen-from-measurements.md).
 
@@ -33,6 +40,8 @@ All data in this repo is synthetic. No real patient or customer data is used.
 git clone https://github.com/<you>/frontdesk-agent.git
 cd frontdesk-agent
 cp .env.example .env
+# Set FDA_JWT_SECRET in .env (the server refuses to start without it):
+uv run python -c "import secrets; print('FDA_JWT_SECRET=' + secrets.token_urlsafe(48))" >> .env
 
 # With Docker (also starts Postgres with pgvector)
 docker compose up --build
@@ -40,7 +49,7 @@ docker compose up --build
 # Or locally with uv (Postgres from compose: docker compose up -d db)
 uv sync --extra dev
 uv run alembic upgrade head
-uv run python scripts/seed.py   # two synthetic clinics with policies; prints tenant IDs
+uv run python scripts/seed.py   # two synthetic clinics; prints each one's admin login and API key
 uv run uvicorn frontdesk_agent.main:app --reload
 ```
 
@@ -51,11 +60,19 @@ curl http://localhost:8000/healthz
 # {"status":"ok","service":"frontdesk-agent","version":"0.0.0","env":"local"}
 ```
 
+Every other endpoint needs a credential, and the tenant comes from it
+(ADR 0016): an API key in `X-API-Key` for scripts, or a bearer token from
+`POST /v1/auth/login` for people. Use the admin API key the seed printed:
+
+```bash
+export KEY=fda_...   # from scripts/seed.py
+```
+
 Draft a reminder (needs `FDA_ANTHROPIC_API_KEY` in `.env`):
 
 ```bash
 curl -X POST http://localhost:8000/v1/drafts/reminder \
-  -H 'Content-Type: application/json' \
+  -H "X-API-Key: $KEY" -H 'Content-Type: application/json' \
   -d '{
     "business_name": "Maple Dental",
     "business_type": "dental office",
@@ -70,10 +87,10 @@ List a seeded clinic's clients, then book idempotently (send the same request
 twice: 201, then 200 with the same appointment):
 
 ```bash
-curl "http://localhost:8000/v1/tenants/<tenant_id>/clients?limit=5"
+curl -H "X-API-Key: $KEY" "http://localhost:8000/v1/clients?limit=5"
 
-curl -X POST http://localhost:8000/v1/tenants/<tenant_id>/appointments \
-  -H 'Content-Type: application/json' \
+curl -X POST http://localhost:8000/v1/appointments \
+  -H "X-API-Key: $KEY" -H 'Content-Type: application/json' \
   -H 'Idempotency-Key: demo-1' \
   -d '{"client_id": "<client_id>", "provider_id": "<provider_id>",
        "starts_at": "2030-03-04T10:00:00-05:00",
@@ -85,8 +102,8 @@ sources; a question the documents do not cover is refused with
 `"needs_human": true`:
 
 ```bash
-curl -X POST http://localhost:8000/v1/tenants/<tenant_id>/policy/answer \
-  -H 'Content-Type: application/json' \
+curl -X POST http://localhost:8000/v1/policy/answer \
+  -H "X-API-Key: $KEY" -H 'Content-Type: application/json' \
   -d '{"question": "is there a fee if I cancel the morning of?"}'
 ```
 
@@ -119,9 +136,10 @@ you> my gum is bleeding a lot          # held for review: try /reviews, /approve
 5. In the Twilio console, set the number's "A message comes in" webhook to
    `https://<your-ngrok-host>/v1/channels/sms` (HTTP POST).
 
-Then text it. Pending reviews: `GET /v1/tenants/<tenant_id>/reviews`; decide
-with `POST .../reviews/<id>/approve` or `/reject` and a body like
-`{"reviewer": "you", "reply": "optional edited text"}`.
+Then text it. Pending reviews: `GET /v1/reviews`; decide with
+`POST /v1/reviews/<id>/approve` or `/reject` and a body like
+`{"reply": "optional edited text"}`. The reviewer recorded in the audit trail
+is whoever the credential belongs to.
 
 A text that is exactly `CANCEL` is an opt-out keyword to Twilio and is never
 treated as a cancellation; "cancel my appointment" works. To change Twilio's
@@ -173,12 +191,14 @@ src/frontdesk_agent/
   prompts.py         loads and renders versioned prompt files
   api/health.py      /healthz and /readyz
   api/drafts.py      /v1/drafts/reminder
-  api/tenants.py     /v1/tenants/... clients, appointments, llm-calls
+  api/auth.py        credentials -> tenant and role; /v1/auth/login
+  api/admin.py       /v1/api-keys, /v1/users, /v1/audit-events (admins)
+  api/tenants.py     /v1/clients, appointments, llm-calls
   db/models.py       tables
   db/repositories.py tenant-bound data access (read this first)
   retrieval/         chunking, embeddings, ingestion, search, metrics
   answering/         grounded policy answers with citations and refusal
-  api/policy.py      /v1/tenants/.../policy/answer, search, documents
+  api/policy.py      /v1/policy/answer, search, documents
   api/channels.py    Twilio webhook: signature check, dedupe, enqueue
   api/reviews.py     review queue: list, approve, edit and approve, reject
   agent/             tools, risk policy, scheduling, the agent loop
@@ -212,7 +232,7 @@ docs/adr/            architecture decision records
 | 3 | Policy retrieval with pgvector, measured ✅ | v0.3 |
 | 4 | Agent with tools, SMS channel, review queue ✅ | v0.4 |
 | 5 | Eval suite gating pull requests ✅ | v0.5 |
-| 6 | Guardrails, auth, redaction, threat model | v0.6 |
+| 6 | Guardrails, auth, redaction, threat model ✅ | v0.6 |
 | 7 | Tracing, metrics, cost and latency dashboards | v0.7 |
 | 8 | AWS deploy with Terraform and continuous delivery | v1.0 |
 | 9 | TypeScript review dashboard and write-up | v1.1 |

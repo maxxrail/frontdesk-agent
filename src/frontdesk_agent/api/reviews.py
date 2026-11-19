@@ -1,7 +1,8 @@
 """The human review queue, and the conversation log a reviewer needs.
 
 Approve, edit-and-approve (approve with your own ``reply``), or reject. The
-tenant comes from the URL until Module 6 binds it to the reviewer's login.
+tenant and the reviewer come from the caller's credential (ADR 0016): the
+audit trail records who decided, not a name typed into the request.
 """
 
 import uuid
@@ -11,7 +12,7 @@ from typing import Annotated, Any
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, ConfigDict, Field
 
-from frontdesk_agent.api.tenants import Session, TenantId
+from frontdesk_agent.api.auth import Principal, Reviewer, Session
 from frontdesk_agent.db.models import (
     MessageDirection,
     MessageStatus,
@@ -29,7 +30,7 @@ from frontdesk_agent.frontdesk.ports import Effects
 from frontdesk_agent.frontdesk.service import ReviewAlreadyDecidedError, ReviewNeedsReplyError
 from frontdesk_agent.services import Services
 
-router = APIRouter(prefix="/v1/tenants/{tenant_id}", tags=["review"])
+router = APIRouter(prefix="/v1", tags=["review"])
 
 
 class ReviewOut(BaseModel):
@@ -50,7 +51,6 @@ class ReviewOut(BaseModel):
 
 
 class Decision(BaseModel):
-    reviewer: str = Field(min_length=1, max_length=120)
     reply: str | None = Field(
         default=None,
         max_length=1600,
@@ -70,19 +70,21 @@ class MessageOut(BaseModel):
 
 @router.get("/reviews", response_model=list[ReviewOut])
 async def list_reviews(
-    tenant_id: TenantId,
+    who: Reviewer,
     session: Session,
     status_filter: Annotated[ReviewStatus | None, Query(alias="status")] = ReviewStatus.PENDING,
     limit: Annotated[int, Query(ge=1, le=200)] = 50,
 ) -> list[ReviewOut]:
-    items = await ReviewRepository(session, tenant_id).by_status(status_filter, limit=limit)
+    items = await ReviewRepository(session, who.tenant_id).by_status(status_filter, limit=limit)
     return [ReviewOut.model_validate(i) for i in items]
 
 
 @router.get("/reviews/{review_id}", response_model=ReviewOut)
-async def get_review(tenant_id: TenantId, review_id: uuid.UUID, session: Session) -> ReviewOut:
+async def get_review(who: Reviewer, review_id: uuid.UUID, session: Session) -> ReviewOut:
     try:
-        return ReviewOut.model_validate(await ReviewRepository(session, tenant_id).get(review_id))
+        return ReviewOut.model_validate(
+            await ReviewRepository(session, who.tenant_id).get(review_id)
+        )
     except NotFoundError as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Review item not found.") from exc
 
@@ -90,7 +92,7 @@ async def get_review(tenant_id: TenantId, review_id: uuid.UUID, session: Session
 async def _decide(
     services: Services,
     session: Session,
-    tenant_id: uuid.UUID,
+    who: Principal,
     review_id: uuid.UUID,
     body: Decision,
     *,
@@ -100,12 +102,12 @@ async def _decide(
     try:
         item = await services.frontdesk.decide(
             session,
-            tenant_id,
+            who.tenant_id,
             review_id,
             effects,
             approve=approve,
             reply=body.reply,
-            reviewer=body.reviewer,
+            reviewer=who.actor,
         )
     except NotFoundError as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Review item not found.") from exc
@@ -121,35 +123,35 @@ async def _decide(
 
 @router.post("/reviews/{review_id}/approve", response_model=ReviewOut)
 async def approve(
-    tenant_id: TenantId,
+    who: Reviewer,
     review_id: uuid.UUID,
     body: Decision,
     session: Session,
     services: Annotated[Services, Depends(get_services)],
 ) -> ReviewOut:
     """Run the held action and send the reply (``reply`` overrides the draft)."""
-    return await _decide(services, session, tenant_id, review_id, body, approve=True)
+    return await _decide(services, session, who, review_id, body, approve=True)
 
 
 @router.post("/reviews/{review_id}/reject", response_model=ReviewOut)
 async def reject(
-    tenant_id: TenantId,
+    who: Reviewer,
     review_id: uuid.UUID,
     body: Decision,
     session: Session,
     services: Annotated[Services, Depends(get_services)],
 ) -> ReviewOut:
     """Do not run the held action. Sends ``reply`` only if one is given."""
-    return await _decide(services, session, tenant_id, review_id, body, approve=False)
+    return await _decide(services, session, who, review_id, body, approve=False)
 
 
 @router.get("/conversations/{conversation_id}/messages", response_model=list[MessageOut])
 async def conversation_messages(
-    tenant_id: TenantId, conversation_id: uuid.UUID, session: Session
+    who: Reviewer, conversation_id: uuid.UUID, session: Session
 ) -> list[MessageOut]:
     try:
-        await ConversationRepository(session, tenant_id).get(conversation_id)
+        await ConversationRepository(session, who.tenant_id).get(conversation_id)
     except NotFoundError as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Conversation not found.") from exc
-    msgs = await SmsMessageRepository(session, tenant_id).in_conversation(conversation_id)
+    msgs = await SmsMessageRepository(session, who.tenant_id).in_conversation(conversation_id)
     return [MessageOut.model_validate(m) for m in msgs]

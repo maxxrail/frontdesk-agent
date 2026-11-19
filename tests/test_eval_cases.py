@@ -30,13 +30,16 @@ OUTCOMES = {
     "held_while_paused",
     *(f"held_for_review:{k.value}" for k in ReviewKind),
     "held_for_review:step_limit",
+    "held_for_review:too_long",
+    *(f"held_for_review:guardrail_{r}" for r in ("other_client", "payment_data")),
+    "held_for_review:guardrail_clinical_advice",
 }
 
 
 def test_suite_size_meets_the_module_target() -> None:
     """Roadmap: at least 150 cases in version control, 40 of them red team."""
     assert len(CASES) + len(POLICY_GOLDEN) >= 150
-    assert Counter(c.feature for c in CASES)["redteam"] == 40
+    assert Counter(c.feature for c in CASES)["redteam"] >= 40
     assert len(SCENARIOS) == 30
 
 

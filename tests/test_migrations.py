@@ -30,10 +30,19 @@ def _scalar(url: str, sql: str) -> object:
 
 TABLES = "SELECT count(*) FROM pg_tables WHERE schemaname = 'public'"
 ENUMS = "SELECT count(*) FROM pg_type WHERE typtype = 'e'"
+FUNCTIONS = "SELECT count(*) FROM pg_proc WHERE proname = 'audit_events_reject_update'"
 
 
 def test_upgrade_downgrade_upgrade_round_trip(db_url: str) -> None:
     cfg = alembic_config(db_url)
+
+    command.downgrade(cfg, "0004")
+    assert _scalar(db_url, TABLES) == 16  # 0005 reverses cleanly on its own
+    assert _scalar(db_url, ENUMS) == 8  # including the shared role type
+
+    command.downgrade(cfg, "0003")
+    assert _scalar(db_url, TABLES) == 15  # 0004 reverses cleanly on its own
+    assert _scalar(db_url, FUNCTIONS) == 0  # including the append-only trigger
 
     command.downgrade(cfg, "0002")
     assert _scalar(db_url, TABLES) == 9  # 0003 reverses cleanly on its own
@@ -47,8 +56,9 @@ def test_upgrade_downgrade_upgrade_round_trip(db_url: str) -> None:
     assert _scalar(db_url, ENUMS) == 0  # enum types are dropped too
 
     command.upgrade(cfg, "head")
-    assert _scalar(db_url, TABLES) == 15
-    assert _scalar(db_url, ENUMS) == 8
+    assert _scalar(db_url, TABLES) == 18
+    assert _scalar(db_url, ENUMS) == 9
+    assert _scalar(db_url, FUNCTIONS) == 1
 
 
 def test_models_and_migrations_have_not_drifted(db_url: str) -> None:

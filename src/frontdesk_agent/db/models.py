@@ -12,11 +12,13 @@ from typing import Any
 
 from pgvector.sqlalchemy import Vector
 from sqlalchemy import (
+    BigInteger,
     CheckConstraint,
     Computed,
     DateTime,
     Enum,
     ForeignKey,
+    Identity,
     Index,
     Integer,
     Numeric,
@@ -366,3 +368,69 @@ class ClientResponseStats(Base, TenantScoped):
     client_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("clients.id", ondelete="CASCADE"))
     offers: Mapped[int] = mapped_column(Integer, default=0)
     reward_sum: Mapped[float] = mapped_column(default=0.0)
+
+
+class AuditEvent(Base, TenantScoped):
+    """Who did what, append-only: every agent tool call and every review
+    decision (Module 6).
+
+    Rows are never updated: the repository has no update method and a
+    database trigger rejects UPDATE (migration 0004). Raw values are allowed
+    here because this is Postgres, not a log (logsetup.py).
+    """
+
+    __tablename__ = "audit_events"
+    __table_args__ = (Index("ix_audit_events_tenant_seq", "tenant_id", "seq"),)
+
+    # Insertion order. created_at is the transaction's start time (now()), so
+    # every event in one agent turn shares it; seq keeps what happened first.
+    seq: Mapped[int] = mapped_column(BigInteger, Identity(always=True), unique=True)
+    kind: Mapped[str] = mapped_column(String(40))  # tool_call | review_decision
+    actor: Mapped[str] = mapped_column(String(120))  # "agent", or who decided
+    subject: Mapped[str] = mapped_column(String(80))  # tool name, or review kind
+    outcome: Mapped[str] = mapped_column(String(40))  # ok | error | rejected | held | ...
+    conversation_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("conversations.id", ondelete="SET NULL")
+    )
+    ref_id: Mapped[uuid.UUID | None] = mapped_column()  # e.g. the review item
+    detail: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict)
+
+
+class Role(enum.StrEnum):
+    """What a credential may do (ADR 0016). Admin can do everything a
+    reviewer can."""
+
+    REVIEWER = "reviewer"
+    ADMIN = "admin"
+
+
+class User(Base, TenantScoped):
+    """A person who signs in to the dashboard: a reviewer or an admin.
+
+    Email is unique across tenants, because login starts from the email and
+    the tenant comes from the user found, never from the request.
+    """
+
+    __tablename__ = "users"
+    __table_args__ = (UniqueConstraint("email"),)
+
+    email: Mapped[str] = mapped_column(String(254))  # stored lowercased
+    password_hash: Mapped[str] = mapped_column(String(255))
+    role: Mapped[Role] = mapped_column(_enum(Role, "role"))
+    active: Mapped[bool] = mapped_column(default=True)
+    last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class ApiKey(Base, TenantScoped):
+    """A machine client's credential. Only a SHA-256 digest of the key is
+    stored; the key itself is shown once, when it is created."""
+
+    __tablename__ = "api_keys"
+    __table_args__ = (UniqueConstraint("prefix"),)
+
+    name: Mapped[str] = mapped_column(String(80))
+    prefix: Mapped[str] = mapped_column(String(16))  # public part, for lookup
+    key_hash: Mapped[str] = mapped_column(String(64))
+    role: Mapped[Role] = mapped_column(_enum(Role, "role"))
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

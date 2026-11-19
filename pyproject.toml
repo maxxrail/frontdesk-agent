@@ -1,6 +1,6 @@
 [project]
 name = "frontdesk-agent"
-version = "0.5.0"
+version = "0.6.0"
 description = "Multi-tenant LLM agent service for appointment front offices, with human review."
 readme = "README.md"
 requires-python = ">=3.12"
@@ -19,6 +19,7 @@ dependencies = [
     "twilio>=9",
     "arq>=0.26",
     "python-multipart>=0.0.9",
+    "pyjwt>=2.10",
 ]
 
 [project.optional-dependencies]

@@ -20,8 +20,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from frontdesk_agent.db.base import TenantScoped
 from frontdesk_agent.db.models import (
+    ApiKey,
     Appointment,
     AppointmentStatus,
+    AuditEvent,
     Client,
     ClientResponseStats,
     Conversation,
@@ -33,9 +35,11 @@ from frontdesk_agent.db.models import (
     ProviderSchedule,
     ReviewItem,
     ReviewStatus,
+    Role,
     SlotOffer,
     SmsMessage,
     Tenant,
+    User,
     WaitlistEntry,
     WaitlistStatus,
 )
@@ -348,6 +352,14 @@ class LLMCallRepository(TenantRepository[LLMCall]):
         stmt = self._scoped().order_by(LLMCall.created_at.desc(), LLMCall.id).limit(limit)
         return list((await self._session.execute(stmt)).scalars())
 
+    async def count_since(self, seconds: float) -> int:
+        """Model calls in the last ``seconds`` of database time, for rate limits."""
+        since = func.now() - func.make_interval(0, 0, 0, 0, 0, 0, seconds)
+        stmt = select(func.count()).where(
+            LLMCall.tenant_id == self._tenant_id, LLMCall.created_at > since
+        )
+        return int((await self._session.execute(stmt)).scalar_one())
+
 
 class ConversationRepository(TenantRepository[Conversation]):
     model = Conversation
@@ -406,6 +418,29 @@ class SmsMessageRepository(TenantRepository[SmsMessage]):
         )
         new_id = (await self._session.execute(stmt)).scalar()
         return None if new_id is None else await self.get(new_id)
+
+    async def inbound_count_since(self, conversation_id: uuid.UUID, seconds: float) -> int:
+        """Inbound texts in the last ``seconds`` of database time, counting only
+        those after the latest review decision in the conversation: once a person
+        has looked, the client starts a fresh window."""
+        since = func.now() - func.make_interval(0, 0, 0, 0, 0, 0, seconds)
+        decided = (
+            select(func.max(ReviewItem.updated_at))
+            .where(
+                ReviewItem.tenant_id == self._tenant_id,
+                ReviewItem.conversation_id == conversation_id,
+                ReviewItem.status != ReviewStatus.PENDING,
+            )
+            .scalar_subquery()
+        )
+        stmt = select(func.count()).where(
+            SmsMessage.tenant_id == self._tenant_id,
+            SmsMessage.conversation_id == conversation_id,
+            SmsMessage.direction == MessageDirection.INBOUND,
+            SmsMessage.created_at > since,
+            SmsMessage.created_at > func.coalesce(decided, since),
+        )
+        return int((await self._session.execute(stmt)).scalar_one())
 
     async def in_conversation(
         self, conversation_id: uuid.UUID, *, status: MessageStatus | None = None
@@ -498,3 +533,88 @@ class ResponseStatsRepository(TenantRepository[ClientResponseStats]):
             )
         )
         await self._session.execute(stmt)
+
+
+class AuditRepository(TenantRepository[AuditEvent]):
+    """Append-only. There is deliberately no update or delete here, and the
+    table rejects UPDATE at the database level (migration 0004)."""
+
+    model = AuditEvent
+
+    async def record(
+        self,
+        *,
+        kind: str,
+        actor: str,
+        subject: str,
+        outcome: str,
+        conversation_id: uuid.UUID | None = None,
+        ref_id: uuid.UUID | None = None,
+        detail: dict[str, Any] | None = None,
+    ) -> AuditEvent:
+        return await self.add(
+            AuditEvent(
+                kind=kind,
+                actor=actor,
+                subject=subject,
+                outcome=outcome,
+                conversation_id=conversation_id,
+                ref_id=ref_id,
+                detail=detail or {},
+            )
+        )
+
+    async def recent(self, *, kind: str | None = None, limit: int = 100) -> list[AuditEvent]:
+        stmt = self._scoped()
+        if kind is not None:
+            stmt = stmt.where(AuditEvent.kind == kind)
+        stmt = stmt.order_by(AuditEvent.seq.desc()).limit(limit)
+        return list((await self._session.execute(stmt)).scalars())
+
+
+class CredentialDirectory:
+    """The two lookups that happen before the tenant is known: a user by
+    email at login, and an API key by its public prefix.
+
+    Like TenantDirectory, deliberately not tenant-bound (ADR 0005, 0016):
+    the tenant is what these lookups establish. Nothing else may use them.
+    """
+
+    def __init__(self, session: AsyncSession) -> None:
+        self._session = session
+
+    async def user_by_email(self, email: str) -> User | None:
+        stmt = select(User).where(User.email == email.strip().lower())
+        return (await self._session.execute(stmt)).scalar_one_or_none()
+
+    async def api_key_by_prefix(self, prefix: str) -> ApiKey | None:
+        stmt = select(ApiKey).where(ApiKey.prefix == prefix)
+        return (await self._session.execute(stmt)).scalar_one_or_none()
+
+
+class EmailTakenError(Exception):
+    pass
+
+
+class UserRepository(TenantRepository[User]):
+    model = User
+
+    async def create(self, *, email: str, password_hash: str, role: Role) -> User:
+        email = email.strip().lower()
+        if await CredentialDirectory(self._session).user_by_email(email) is not None:
+            raise EmailTakenError("a user with that email already exists")
+        return await self.add(User(email=email, password_hash=password_hash, role=role))
+
+
+class ApiKeyRepository(TenantRepository[ApiKey]):
+    model = ApiKey
+
+    async def create(self, *, name: str, prefix: str, key_hash: str, role: Role) -> ApiKey:
+        return await self.add(ApiKey(name=name, prefix=prefix, key_hash=key_hash, role=role))
+
+    async def revoke(self, key_id: uuid.UUID, now: datetime) -> ApiKey:
+        key = await self.get(key_id)
+        if key.revoked_at is None:
+            key.revoked_at = now
+            await self._session.flush()
+        return key
