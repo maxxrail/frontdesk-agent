@@ -8,12 +8,16 @@ from a waitlist, and routes anything risky to a human for approval.
 Every model call is logged with tokens, cost and latency. Every prompt change is
 gated by an eval suite in CI.
 
-**Status:** Module 4 of 9 complete. Clients text the clinic; an agent answers
+**Status:** Module 6 of 9 complete. Clients text the clinic; an agent answers
 policy questions from the clinic's own documents, finds open slots, books and
 cancels, and hands anything risky to a person: late cancellations, money,
 and medical questions wait in a review queue and send nothing until approved.
 When a slot frees up, waitlisted clients are offered it one at a time, ranked
-by a bandit that learns who answers fastest.
+by a bandit that learns who answers fastest. Staff sign in with per-tenant
+API keys or logins; guardrails clean what reaches the model and check every
+reply before it is sent; logs never hold a phone number or name. The
+[threat model](docs/threat-model.md) walks the OWASP Top 10 for LLM
+applications and lists the risks accepted.
 
 | Measured | |
 | --- | --- |
@@ -21,7 +25,10 @@ by a bandit that learns who answers fastest.
 | Agent step limit | 6 model calls, tested with a model that never stops |
 | Forged webhooks rejected | 4 of 4 forgery kinds, 403 |
 | Waitlist bandit vs first-come-first-served (simulated) | 0.654 vs 0.192 mean reward |
-| Tests | 161 |
+| Eval suite, real model (PR #14) | 113 of 134 cases, red team 38 of 42, $1.45 a run |
+| Instructions planted in a policy document | 2 of 2 ignored by the model; cancellations held regardless |
+| Guarantees broken on purpose to prove a test fails | 21 in Module 6 |
+| Tests | 449 |
 
 How these were chosen, including why hybrid search lost: [ADR 0008](docs/adr/0008-retrieval-chosen-from-measurements.md).
 
@@ -225,7 +232,7 @@ docs/adr/            architecture decision records
 | 3 | Policy retrieval with pgvector, measured ✅ | v0.3 |
 | 4 | Agent with tools, SMS channel, review queue ✅ | v0.4 |
 | 5 | Eval suite gating pull requests ✅ | v0.5 |
-| 6 | Guardrails, auth, redaction, threat model | v0.6 |
+| 6 | Guardrails, auth, redaction, threat model ✅ | v0.6 |
 | 7 | Tracing, metrics, cost and latency dashboards | v0.7 |
 | 8 | AWS deploy with Terraform and continuous delivery | v1.0 |
 | 9 | TypeScript review dashboard and write-up | v1.1 |

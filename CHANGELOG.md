@@ -5,6 +5,53 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-11-19
+
+Module 6: guardrails, security and privacy.
+
+### Added
+
+- Credentials carry the tenant (ADR 0016): per-tenant API keys (SHA-256
+  stored, shown once, revocable) and password login with 60-minute JWTs,
+  with reviewer and admin roles. Routes no longer name a tenant. New
+  tenants are created from the command line (`scripts/create_tenant.py`).
+  New dependency: PyJWT.
+- An append-only audit trail (`audit_events`): every tool call, review
+  decision and guardrail hold. A trigger rejects UPDATE.
+- Log redaction: personal fields replaced whole, phone numbers masked in
+  any format, SQL parameters hidden. A full flow's logs contain none of the
+  seeded numbers.
+- Input guardrails (ADR 0017): SMS and policy excerpts are NFKC-normalised,
+  invisible characters removed and a typed `[Staff note]` defanged before
+  the risk rules or the model see them. Messages over 1000 characters go
+  to a person without a model call.
+- Untrusted documents: the tool set is fixed before the model reads
+  anything, and while policy text is in context a cancellation waits for
+  staff. Two red-team cases plant instructions in a document; both passed
+  on the real model.
+- Output guardrail: a reply with clinical advice, card data, or another
+  client's phone number or full name is held for review instead of sent.
+- Rate limits (ADR 0018): more than 12 texts in 10 minutes from one phone
+  pauses the conversation for a person; more than 1000 model calls an hour
+  for a tenant defers new messages. Counted in Postgres; `FDA_RATE_*`.
+- CI security job: `pip-audit` on the locked dependencies and gitleaks on
+  every commit. Dependabot version updates for uv, Actions and Docker.
+- `docs/threat-model.md`: the OWASP Top 10 for LLM applications (2025), with
+  the residual risks accepted and why.
+
+### Changed
+
+- The clinical-advice patterns moved from the eval checks to
+  `guardrails.py`; the eval and the send path share one list.
+- Eval cases can carry extra policy `documents`.
+
+### Fixed
+
+- The medical risk rule `\bnumb` matched "number", holding "can you confirm
+  my number?" for review.
+- Locked certifi, filelock and virtualenv had published advisories; all
+  three are upgraded.
+
 ## [0.5.0] - 2026-11-16
 
 Module 5: evals that gate pull requests.

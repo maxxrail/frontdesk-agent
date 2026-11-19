@@ -42,7 +42,9 @@ Done when:
 Needs Maxx: the 40 hand labels; `ANTHROPIC_API_KEY` as a GitHub Actions
 secret (Settings > Secrets and variables > Actions); the eval budget.
 
-## Module 6: Guardrails, security and privacy (v0.6)
+## Module 6: Guardrails, security and privacy (v0.6) ✅
+
+Done in v0.6.0 (PR #14). Threat model: `docs/threat-model.md`; decisions: ADR 0016-0018.
 
 The system fails safe and leaves an audit trail.
 
