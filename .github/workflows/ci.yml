@@ -48,7 +48,7 @@ jobs:
       FDA_JWT_SECRET: ci-only-not-a-secret-0123456789abcdef0123456789
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Install uv
         uses: astral-sh/setup-uv@v3
@@ -103,7 +103,7 @@ jobs:
     name: Dependency audit and secret scan
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0 # scan every commit, not just the last
 
@@ -125,7 +125,7 @@ jobs:
     name: Docker build
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Build image
         run: docker build -t frontdesk-agent:ci .
