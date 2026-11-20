@@ -165,3 +165,15 @@ async def test_approving_an_item_with_no_draft_needs_a_reply(
     ok = await http.post(f"{base}/{item['id']}/approve", json={"reply": "Hi! How can we help?"})
     assert ok.status_code == 200
     assert await count(desk, ReviewItem) == 1
+
+
+async def test_the_queued_turn_carries_the_webhooks_request_id(
+    http: httpx.AsyncClient, desk: Desk
+) -> None:
+    """Module 7: the worker's log lines for this SMS join the webhook's."""
+    r = await http.post(
+        "/v1/channels/sms", data=form(), headers={**signed(form()), "X-Request-ID": "tw-42"}
+    )
+    assert r.status_code == 200 and r.headers["X-Request-ID"] == "tw-42"
+    [(job, _, kwargs)] = desk.queue.jobs
+    assert job == "handle_inbound" and kwargs["request_id"] == "tw-42"

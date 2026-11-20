@@ -67,6 +67,9 @@ async def inbound_sms(
     await session.commit()
     if msg is not None:  # None: Twilio retried a message we already have
         await services.queue.enqueue(
-            "handle_inbound", tenant_id=str(tenant.id), message_id=str(msg.id)
+            "handle_inbound",
+            tenant_id=str(tenant.id),
+            message_id=str(msg.id),
+            request_id=request.state.request_id,  # the job's logs join this request's
         )
     return Response(EMPTY_TWIML, media_type="application/xml")

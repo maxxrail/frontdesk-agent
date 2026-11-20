@@ -3,10 +3,10 @@
 Run locally with:  uvicorn frontdesk_agent.main:app --reload
 """
 
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, Request, status
+from fastapi import FastAPI, Request, Response, status
 from fastapi.responses import JSONResponse
 
 from frontdesk_agent import __version__
@@ -23,6 +23,7 @@ from frontdesk_agent.db.session import make_engine, make_sessionmaker
 from frontdesk_agent.dependencies import LazyLLMClient
 from frontdesk_agent.errortracking import init_sentry
 from frontdesk_agent.llm.base import LLMConfigurationError
+from frontdesk_agent.logcontext import bound, request_id_from
 from frontdesk_agent.logsetup import configure_logging
 from frontdesk_agent.services import ArqQueue, build_services
 
@@ -67,6 +68,19 @@ def create_app(database_url: str | None = None) -> FastAPI:
         summary="Multi-tenant LLM agent service for appointment front offices.",
         lifespan=lifespan,
     )
+
+    @app.middleware("http")
+    async def request_id(
+        request: Request, call_next: Callable[[Request], Awaitable[Response]]
+    ) -> Response:
+        """Every log line for this request carries one id, echoed back to the
+        caller so a support ticket can quote it."""
+        rid = request_id_from(request.headers.get("X-Request-ID"))
+        request.state.request_id = rid
+        with bound(request_id=rid):
+            response = await call_next(request)
+        response.headers["X-Request-ID"] = rid
+        return response
 
     @app.exception_handler(LLMConfigurationError)
     async def llm_not_configured(request: Request, exc: LLMConfigurationError) -> JSONResponse:

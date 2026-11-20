@@ -21,6 +21,8 @@ import re
 import sys
 from typing import Any
 
+from frontdesk_agent import logcontext
+
 PHONE_MASK = "[phone]"
 FIELD_MASK = "[redacted]"
 
@@ -88,6 +90,8 @@ class RedactingFormatter(logging.Formatter):
             "level": record.levelname,
             "logger": record.name,
             "message": redact(record.getMessage()),
+            # request_id, job, tenant_id, conversation_id: see logcontext.py.
+            **logcontext.current(),
         }
         for key, value in vars(record).items():
             if key not in _STANDARD and not key.startswith("_"):
