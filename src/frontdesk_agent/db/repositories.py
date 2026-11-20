@@ -34,6 +34,7 @@ from frontdesk_agent.db.models import (
     Provider,
     ProviderSchedule,
     ReviewItem,
+    ReviewKind,
     ReviewStatus,
     Role,
     SlotOffer,
@@ -618,3 +619,26 @@ class ApiKeyRepository(TenantRepository[ApiKey]):
             key.revoked_at = now
             await self._session.flush()
         return key
+
+
+class OperationsCounts:
+    """Counts across every tenant, for /metrics only.
+
+    Not tenant-bound, like the two directories above, because an operator's
+    dashboard is about the whole system. It returns numbers, never rows, so
+    nothing a tenant owns can leave through it.
+    """
+
+    def __init__(self, session: AsyncSession) -> None:
+        self._session = session
+
+    async def pending_reviews_by_kind(self) -> dict[str, int]:
+        stmt = (
+            select(ReviewItem.kind, func.count())
+            .where(ReviewItem.status == ReviewStatus.PENDING)
+            .group_by(ReviewItem.kind)
+        )
+        counts = {k.value: 0 for k in ReviewKind}
+        for kind, n in (await self._session.execute(stmt)).all():
+            counts[kind.value] = int(n)
+        return counts

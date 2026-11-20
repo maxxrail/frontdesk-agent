@@ -28,6 +28,7 @@ from frontdesk_agent.llm.messages import (
 )
 from frontdesk_agent.llm.pricing import cost_usd
 from frontdesk_agent.llm.retry import RetryPolicy, with_retries
+from frontdesk_agent.metrics import TURN_COST
 from frontdesk_agent.prompts import load_prompt
 from frontdesk_agent.timefmt import human_datetime
 from frontdesk_agent.tracing import tracer
@@ -109,6 +110,7 @@ async def run_agent(
                 "agent.cost_usd": float(run.cost_usd),
             }
         )
+        TURN_COST.observe(float(run.cost_usd))
         return run
 
 

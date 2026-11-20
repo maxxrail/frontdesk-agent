@@ -10,6 +10,7 @@ jobs inline. Jobs are retried by arq on failure; every job is idempotent
 from typing import Any, ClassVar
 
 from arq.connections import RedisSettings
+from prometheus_client import start_http_server
 
 from frontdesk_agent.config import get_settings
 from frontdesk_agent.db.session import make_engine, make_sessionmaker
@@ -27,6 +28,9 @@ async def startup(ctx: dict[str, Any]) -> None:
     # turns that into an event, redacted like every other.
     init_sentry(settings)
     init_tracing(settings)
+    if settings.metrics_port:
+        # The worker makes the model and tool calls; Prometheus scrapes it here.
+        start_http_server(settings.metrics_port)
     engine = make_engine(settings.database_url)
     ctx["engine"] = engine
     ctx["services"] = build_services(settings, make_sessionmaker(engine), get_llm_client())

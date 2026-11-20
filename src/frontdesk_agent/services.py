@@ -8,6 +8,7 @@ delivered them, so the inline queue and the Redis worker behave the same.
 import asyncio
 import logging
 import random
+import time
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -23,6 +24,7 @@ from frontdesk_agent.frontdesk.service import FrontDesk, RateLimits
 from frontdesk_agent.frontdesk.slotfill import SlotFiller
 from frontdesk_agent.llm.base import LLMClient
 from frontdesk_agent.logcontext import bind, bound, new_request_id
+from frontdesk_agent.metrics import JOBS_FAILED, SMS_TURN_SECONDS, SMS_TURNS, sms_outcome
 from frontdesk_agent.retrieval.embeddings import Embedder, default_embedder
 from frontdesk_agent.tracing import job_span, trace_id_hex
 
@@ -50,7 +52,16 @@ async def run_job(services: Services, job: str, **kwargs: Any) -> str:
         span.set_attribute("tenant.id", kwargs["tenant_id"])
         with bound(job=job, tenant_id=kwargs["tenant_id"], request_id=rid):
             bind(trace_id=trace_id_hex(span))
-            return await _run_job(services, job, **kwargs)
+            start = time.perf_counter()
+            try:
+                outcome = await _run_job(services, job, **kwargs)
+            except Exception:
+                JOBS_FAILED.labels(job).inc()
+                raise
+            if job == "handle_inbound":
+                SMS_TURNS.labels(sms_outcome(outcome)).inc()
+                SMS_TURN_SECONDS.observe(time.perf_counter() - start)
+            return outcome
 
 
 async def _run_job(services: Services, job: str, **kwargs: Any) -> str:

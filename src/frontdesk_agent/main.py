@@ -3,6 +3,7 @@
 Run locally with:  uvicorn frontdesk_agent.main:app --reload
 """
 
+import time
 from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
 
@@ -15,6 +16,7 @@ from frontdesk_agent.api.auth import router as auth_router
 from frontdesk_agent.api.channels import router as channels_router
 from frontdesk_agent.api.drafts import router as drafts_router
 from frontdesk_agent.api.health import router as health_router
+from frontdesk_agent.api.observability import router as observability_router
 from frontdesk_agent.api.policy import router as policy_router
 from frontdesk_agent.api.reviews import router as reviews_router
 from frontdesk_agent.api.tenants import router as tenants_router
@@ -25,6 +27,7 @@ from frontdesk_agent.errortracking import init_sentry
 from frontdesk_agent.llm.base import LLMConfigurationError
 from frontdesk_agent.logcontext import bound, request_id_from
 from frontdesk_agent.logsetup import configure_logging
+from frontdesk_agent.metrics import HTTP_REQUESTS, HTTP_SECONDS
 from frontdesk_agent.services import ArqQueue, build_services
 from frontdesk_agent.tracing import SpanKind, init_tracing, trace_id_hex, tracer
 
@@ -80,11 +83,14 @@ def create_app(database_url: str | None = None) -> FastAPI:
         rid = request_id_from(request.headers.get("X-Request-ID"))
         request.state.request_id = rid
         method = request.method
+        start = time.perf_counter()
         with tracer.start_as_current_span(f"{method}", kind=SpanKind.SERVER) as span:
             with bound(request_id=rid, trace_id=trace_id_hex(span)):
                 response = await call_next(request)
             # The route template, not the path: no ids or numbers in the name.
             route = getattr(request.scope.get("route"), "path", None) or "unmatched"
+            HTTP_REQUESTS.labels(method, route, str(response.status_code)).inc()
+            HTTP_SECONDS.labels(route).observe(time.perf_counter() - start)
             span.update_name(f"{method} {route}")
             span.set_attributes(
                 {
@@ -107,6 +113,7 @@ def create_app(database_url: str | None = None) -> FastAPI:
         )
 
     app.include_router(health_router)
+    app.include_router(observability_router)
     app.include_router(auth_router)
     app.include_router(admin_router)
     app.include_router(drafts_router)

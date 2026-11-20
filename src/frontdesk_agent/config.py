@@ -77,6 +77,10 @@ class Settings(BaseSettings):
     # OTLP/HTTP collector for traces, e.g. http://localhost:4318 (Jaeger in
     # docker compose). Empty: spans are made but not exported.
     otel_endpoint: str = ""
+    # The worker serves /metrics on this port (0: off). The API serves its own.
+    metrics_port: int = 0
+    # Where eval results files are read for the eval-score metric.
+    eval_results_dir: str = "evals/results"
 
     # Background jobs: "redis" for the arq worker, "inline" to run them inside
     # the API process (local development without Redis).

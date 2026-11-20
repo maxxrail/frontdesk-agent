@@ -41,6 +41,7 @@ from frontdesk_agent.db.repositories import (
 )
 from frontdesk_agent.guardrails import clean_untrusted
 from frontdesk_agent.llm.messages import ToolSpec
+from frontdesk_agent.metrics import TOOL_CALLS
 from frontdesk_agent.retrieval.embeddings import Embedder
 from frontdesk_agent.retrieval.store import PolicyStore
 from frontdesk_agent.tracing import Status, StatusCode, tracer
@@ -436,6 +437,8 @@ async def execute(
         # The tool's input is the model's, sometimes the client's words: not
         # an attribute. The audit trail below keeps it, in Postgres.
         span.set_attributes({"tool.name": name[:80], "tool.outcome": status})
+        # An unknown tool name is the model's text: fold it so labels stay bounded.
+        TOOL_CALLS.labels(name if name in TOOLS else "unknown", status).inc()
         if status in ("error", "rejected"):
             span.set_status(Status(StatusCode.ERROR, status))
     detail: dict[str, Any] = {"input": raw}

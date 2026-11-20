@@ -24,6 +24,7 @@ nothing. Locally, ``docker compose up -d jaeger`` and
 import time
 from collections.abc import Iterator, Mapping
 from contextlib import contextmanager
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from opentelemetry import propagate, trace
@@ -48,6 +49,7 @@ __all__ = [
 
 from frontdesk_agent import __version__
 from frontdesk_agent.llm.pricing import cost_usd
+from frontdesk_agent.metrics import record_llm_call
 
 if TYPE_CHECKING:
     from frontdesk_agent.config import Settings
@@ -133,7 +135,7 @@ class TracedLLMClient:
         prompt_version: str,
         max_tokens: int = 1024,
     ) -> "LLMCompletion":
-        with _llm_span("complete", prompt_name, prompt_version) as span:
+        with _llm_span("complete", prompt_name, prompt_version) as c:
             out = await self._inner.complete(
                 system=system,
                 user=user,
@@ -141,7 +143,7 @@ class TracedLLMClient:
                 prompt_version=prompt_version,
                 max_tokens=max_tokens,
             )
-            _record(span, out.model, out.input_tokens, out.output_tokens, out.stop_reason)
+            _record(c, out.model, out.input_tokens, out.output_tokens, out.stop_reason)
             return out
 
     async def converse(
@@ -154,7 +156,7 @@ class TracedLLMClient:
         prompt_version: str,
         max_tokens: int = 1024,
     ) -> "AgentTurn":
-        with _llm_span("converse", prompt_name, prompt_version) as span:
+        with _llm_span("converse", prompt_name, prompt_version) as c:
             out = await self._inner.converse(
                 system=system,
                 messages=messages,
@@ -163,36 +165,53 @@ class TracedLLMClient:
                 prompt_version=prompt_version,
                 max_tokens=max_tokens,
             )
-            _record(span, out.model, out.input_tokens, out.output_tokens, out.stop_reason)
-            span.set_attribute("llm.tool_calls", len(out.tool_calls))
+            _record(c, out.model, out.input_tokens, out.output_tokens, out.stop_reason)
+            c.span.set_attribute("llm.tool_calls", len(out.tool_calls))
             return out
 
 
+@dataclass
+class _Call:
+    span: Span
+    prompt: str
+    start: float
+
+
 @contextmanager
-def _llm_span(operation: str, prompt_name: str, prompt_version: str) -> Iterator[Span]:
-    start = time.perf_counter()
+def _llm_span(operation: str, prompt_name: str, prompt_version: str) -> Iterator[_Call]:
+    prompt = f"{prompt_name}/{prompt_version}"
     with tracer.start_as_current_span("llm.call", kind=SpanKind.CLIENT) as span:
         span.set_attribute("gen_ai.operation.name", operation)
-        span.set_attribute("llm.prompt", f"{prompt_name}/{prompt_version}")
+        span.set_attribute("llm.prompt", prompt)
+        c = _Call(span, prompt, time.perf_counter())
         try:
-            yield span
+            yield c
         except Exception as exc:
             span.set_status(Status(StatusCode.ERROR, type(exc).__name__))
+            record_llm_call("unknown", prompt, seconds=time.perf_counter() - c.start, ok=False)
             raise
-        finally:
-            span.set_attribute("llm.latency_ms", round((time.perf_counter() - start) * 1000))
 
 
-def _record(
-    span: Span, model: str, input_tokens: int, output_tokens: int, stop: str | None
-) -> None:
+def _record(c: _Call, model: str, input_tokens: int, output_tokens: int, stop: str | None) -> None:
+    """Span attributes and Prometheus numbers for one call, from the same
+    values, so metrics work whether or not traces are exported."""
+    seconds = time.perf_counter() - c.start
+    cost = cost_usd(model, input_tokens, output_tokens)
     attrs: dict[str, Any] = {
         "gen_ai.request.model": model,
         "gen_ai.usage.input_tokens": input_tokens,
         "gen_ai.usage.output_tokens": output_tokens,
         "gen_ai.response.finish_reason": stop or "",
+        "llm.latency_ms": round(seconds * 1000),
     }
-    cost = cost_usd(model, input_tokens, output_tokens)
     if cost is not None:
         attrs["llm.cost_usd"] = float(cost)
-    span.set_attributes(attrs)
+    c.span.set_attributes(attrs)
+    record_llm_call(
+        model,
+        c.prompt,
+        seconds=seconds,
+        input_tokens=input_tokens,
+        output_tokens=output_tokens,
+        cost=cost,
+    )
