@@ -34,6 +34,9 @@ from frontdesk_agent.security import new_api_key
 # A throwaway signing key, so the app starts in tests (it refuses to without
 # one). Settings are cached at import, hence the cache_clear.
 os.environ.setdefault("FDA_JWT_SECRET", "test-only-not-a-secret-" + "x" * 32)
+# Never report to a real Sentry project from tests, whatever .env says.
+# Environment variables win over .env in pydantic-settings.
+os.environ["FDA_SENTRY_DSN"] = ""
 get_settings.cache_clear()
 
 aio.use_selector_loop_policy()

@@ -21,6 +21,7 @@ from frontdesk_agent.api.tenants import router as tenants_router
 from frontdesk_agent.config import get_settings
 from frontdesk_agent.db.session import make_engine, make_sessionmaker
 from frontdesk_agent.dependencies import LazyLLMClient
+from frontdesk_agent.errortracking import init_sentry
 from frontdesk_agent.llm.base import LLMConfigurationError
 from frontdesk_agent.logsetup import configure_logging
 from frontdesk_agent.services import ArqQueue, build_services
@@ -43,6 +44,9 @@ def create_app(database_url: str | None = None) -> FastAPI:
             # the app. Generate one with:
             #   python -c "import secrets; print(secrets.token_urlsafe(48))"
             raise RuntimeError("FDA_JWT_SECRET is not set; refusing to start (ADR 0016).")
+        # Here, not at import: importing the app (tests, tools) must never
+        # start sending errors to Sentry.
+        init_sentry(get_settings())
         # Creating an engine does not connect, so the app starts even when
         # Postgres is down; /readyz reports it instead of the process crashing.
         engine = make_engine(url)

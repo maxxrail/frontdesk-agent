@@ -71,6 +71,10 @@ class Settings(BaseSettings):
     rate_tenant_model_calls: int = 1000
     rate_tenant_window_s: int = 3600
 
+    # Error reporting (Module 7). Empty: nothing is sent. Events are redacted
+    # before sending (errortracking.py). SecretStr keeps it out of reprs.
+    sentry_dsn: SecretStr = SecretStr("")
+
     # Background jobs: "redis" for the arq worker, "inline" to run them inside
     # the API process (local development without Redis).
     job_queue: Literal["redis", "inline"] = "inline"
