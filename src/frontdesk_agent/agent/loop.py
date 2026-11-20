@@ -12,6 +12,7 @@ effects lives in tools; this file only sequences them and keeps the record.
 
 import logging
 from dataclasses import dataclass, field
+from decimal import Decimal
 from typing import Literal
 
 from frontdesk_agent.agent.tools import TOOLS, ToolContext, execute
@@ -29,6 +30,7 @@ from frontdesk_agent.llm.pricing import cost_usd
 from frontdesk_agent.llm.retry import RetryPolicy, with_retries
 from frontdesk_agent.prompts import load_prompt
 from frontdesk_agent.timefmt import human_datetime
+from frontdesk_agent.tracing import tracer
 
 logger = logging.getLogger(__name__)
 
@@ -46,6 +48,7 @@ class AgentRun:
     steps: int
     new_messages: list[Message] = field(default_factory=list)
     tool_calls: list[str] = field(default_factory=list)
+    cost_usd: Decimal = Decimal(0)  # every model call in this run, priced
 
 
 def system_prompt(ctx: ToolContext, prompt_version: str = PROMPT_VERSION) -> str:
@@ -89,6 +92,35 @@ async def run_agent(
     With ``read_only`` the agent can look things up but not book, cancel or
     save: used to draft a reply for a human to review.
     """
+    with tracer.start_as_current_span("agent.turn") as span:
+        span.set_attributes(
+            {
+                "conversation.id": str(ctx.conversation.id),
+                "agent.read_only": read_only,
+                "llm.prompt": f"{PROMPT_NAME}/{prompt_version}",
+            }
+        )
+        run = await _run(llm, ctx, history, read_only, max_steps, retry_policy, prompt_version)
+        span.set_attributes(
+            {
+                "agent.steps": run.steps,
+                "agent.stopped": run.stopped,
+                "agent.tool_calls": len(run.tool_calls),
+                "agent.cost_usd": float(run.cost_usd),
+            }
+        )
+        return run
+
+
+async def _run(
+    llm: LLMClient,
+    ctx: ToolContext,
+    history: list[Message],
+    read_only: bool,
+    max_steps: int,
+    retry_policy: RetryPolicy | None,
+    prompt_version: str,
+) -> AgentRun:
     # Fixed here, before the model reads anything: no text it reads later
     # (the client's, a document's, a tool result's) can widen it.
     allowed = frozenset(n for n, t in TOOLS.items() if t.read_only or not read_only)
@@ -113,9 +145,10 @@ async def run_agent(
             )
 
         turn = await with_retries(call, policy)
+        cost = cost_usd(turn.model, turn.input_tokens, turn.output_tokens)
+        run.cost_usd += cost or Decimal(0)
         await LLMCallRepository(ctx.session, ctx.tenant.id).record(
-            _as_completion(turn),
-            cost_usd=cost_usd(turn.model, turn.input_tokens, turn.output_tokens),
+            _as_completion(turn), cost_usd=cost
         )
         messages.append(turn.as_message())
         run.new_messages.append(turn.as_message())

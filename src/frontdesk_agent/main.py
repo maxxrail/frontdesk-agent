@@ -26,6 +26,7 @@ from frontdesk_agent.llm.base import LLMConfigurationError
 from frontdesk_agent.logcontext import bound, request_id_from
 from frontdesk_agent.logsetup import configure_logging
 from frontdesk_agent.services import ArqQueue, build_services
+from frontdesk_agent.tracing import SpanKind, init_tracing, trace_id_hex, tracer
 
 
 def create_app(database_url: str | None = None) -> FastAPI:
@@ -48,6 +49,7 @@ def create_app(database_url: str | None = None) -> FastAPI:
         # Here, not at import: importing the app (tests, tools) must never
         # start sending errors to Sentry.
         init_sentry(get_settings())
+        init_tracing(get_settings())
         # Creating an engine does not connect, so the app starts even when
         # Postgres is down; /readyz reports it instead of the process crashing.
         engine = make_engine(url)
@@ -77,8 +79,21 @@ def create_app(database_url: str | None = None) -> FastAPI:
         caller so a support ticket can quote it."""
         rid = request_id_from(request.headers.get("X-Request-ID"))
         request.state.request_id = rid
-        with bound(request_id=rid):
-            response = await call_next(request)
+        method = request.method
+        with tracer.start_as_current_span(f"{method}", kind=SpanKind.SERVER) as span:
+            with bound(request_id=rid, trace_id=trace_id_hex(span)):
+                response = await call_next(request)
+            # The route template, not the path: no ids or numbers in the name.
+            route = getattr(request.scope.get("route"), "path", None) or "unmatched"
+            span.update_name(f"{method} {route}")
+            span.set_attributes(
+                {
+                    "http.request.method": method,
+                    "http.route": route,
+                    "http.response.status_code": response.status_code,
+                    "request.id": rid,
+                }
+            )
         response.headers["X-Request-ID"] = rid
         return response
 

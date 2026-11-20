@@ -9,6 +9,7 @@ services:
       FDA_DATABASE_URL: postgresql+psycopg://frontdesk:frontdesk@db:5432/frontdesk
       FDA_JOB_QUEUE: redis
       FDA_REDIS_URL: redis://redis:6379/0
+      FDA_OTEL_ENDPOINT: http://jaeger:4318
     env_file:
       - path: .env
         required: false
@@ -68,6 +69,15 @@ services:
       interval: 5s
       timeout: 3s
       retries: 10
+
+  # Traces (Module 7): the UI is http://localhost:16686; search by the tag
+  # conversation.id=<uuid> to open every trace of one conversation.
+  # Spans are in memory only and go when the container does.
+  jaeger:
+    image: jaegertracing/all-in-one:1.62.0
+    ports:
+      - "16686:16686" # UI
+      - "4318:4318" # OTLP over HTTP, from the api and the worker
 
 volumes:
   pgdata:

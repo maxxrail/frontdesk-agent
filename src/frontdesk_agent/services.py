@@ -22,8 +22,9 @@ from frontdesk_agent.frontdesk.ports import Clock, Effects, JobQueue, SmsSender,
 from frontdesk_agent.frontdesk.service import FrontDesk, RateLimits
 from frontdesk_agent.frontdesk.slotfill import SlotFiller
 from frontdesk_agent.llm.base import LLMClient
-from frontdesk_agent.logcontext import bound, new_request_id
+from frontdesk_agent.logcontext import bind, bound, new_request_id
 from frontdesk_agent.retrieval.embeddings import Embedder, default_embedder
+from frontdesk_agent.tracing import job_span, trace_id_hex
 
 logger = logging.getLogger(__name__)
 
@@ -45,8 +46,11 @@ async def run_job(services: Services, job: str, **kwargs: Any) -> str:
     Its log lines carry the job name, tenant and the request that queued it
     (``request_id`` in the job's arguments, when there was one)."""
     rid = kwargs.pop("request_id", None) or new_request_id()
-    with bound(job=job, tenant_id=kwargs["tenant_id"], request_id=rid):
-        return await _run_job(services, job, **kwargs)
+    with job_span(job, kwargs.pop("trace", None)) as span:
+        span.set_attribute("tenant.id", kwargs["tenant_id"])
+        with bound(job=job, tenant_id=kwargs["tenant_id"], request_id=rid):
+            bind(trace_id=trace_id_hex(span))
+            return await _run_job(services, job, **kwargs)
 
 
 async def _run_job(services: Services, job: str, **kwargs: Any) -> str:

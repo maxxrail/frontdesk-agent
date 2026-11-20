@@ -74,6 +74,9 @@ class Settings(BaseSettings):
     # Error reporting (Module 7). Empty: nothing is sent. Events are redacted
     # before sending (errortracking.py). SecretStr keeps it out of reprs.
     sentry_dsn: SecretStr = SecretStr("")
+    # OTLP/HTTP collector for traces, e.g. http://localhost:4318 (Jaeger in
+    # docker compose). Empty: spans are made but not exported.
+    otel_endpoint: str = ""
 
     # Background jobs: "redis" for the arq worker, "inline" to run them inside
     # the API process (local development without Redis).

@@ -71,6 +71,7 @@ from frontdesk_agent.llm.base import LLMClient
 from frontdesk_agent.llm.messages import Message, TextBlock
 from frontdesk_agent.logcontext import bind
 from frontdesk_agent.retrieval.embeddings import Embedder
+from frontdesk_agent.tracing import set_conversation
 
 logger = logging.getLogger(__name__)
 
@@ -118,6 +119,7 @@ class FrontDesk:
             (await self._conversation_client(session, tenant, msg)).id
         )
         bind(conversation_id=str(convo.id))
+        set_conversation(str(convo.id))
         await session.refresh(msg)  # re-read under the conversation lock
         if msg.status != MessageStatus.RECEIVED:
             return "already_handled"
@@ -268,6 +270,7 @@ class FrontDesk:
             raise ReviewAlreadyDecidedError(f"review item is already {item.status.value}")
         convo = await ConversationRepository(session, tenant.id).get(item.conversation_id)
         bind(conversation_id=str(convo.id))
+        set_conversation(str(convo.id))
         client = await ClientRepository(session, tenant.id).get(convo.client_id)
 
         text = (reply if reply is not None else item.proposed_reply if approve else "").strip()

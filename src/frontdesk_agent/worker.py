@@ -17,6 +17,7 @@ from frontdesk_agent.dependencies import get_llm_client
 from frontdesk_agent.errortracking import init_sentry
 from frontdesk_agent.logsetup import configure_logging
 from frontdesk_agent.services import Services, build_services, run_job
+from frontdesk_agent.tracing import init_tracing
 
 
 async def startup(ctx: dict[str, Any]) -> None:
@@ -25,6 +26,7 @@ async def startup(ctx: dict[str, Any]) -> None:
     # A failed job is logged at ERROR by arq; Sentry's logging integration
     # turns that into an event, redacted like every other.
     init_sentry(settings)
+    init_tracing(settings)
     engine = make_engine(settings.database_url)
     ctx["engine"] = engine
     ctx["services"] = build_services(settings, make_sessionmaker(engine), get_llm_client())

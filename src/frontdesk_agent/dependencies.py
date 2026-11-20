@@ -26,11 +26,15 @@ def get_llm_client() -> LLMClient:
         )
 
     from frontdesk_agent.llm.anthropic_client import AnthropicLLMClient
+    from frontdesk_agent.tracing import TracedLLMClient
 
-    return AnthropicLLMClient(
-        api_key=settings.anthropic_api_key,
-        model=settings.llm_model,
-        timeout_s=settings.llm_timeout_s,
+    # Every model call made through the app is a span (tracing.py).
+    return TracedLLMClient(
+        AnthropicLLMClient(
+            api_key=settings.anthropic_api_key,
+            model=settings.llm_model,
+            timeout_s=settings.llm_timeout_s,
+        )
     )
 
 

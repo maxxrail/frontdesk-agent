@@ -177,3 +177,28 @@ async def test_the_queued_turn_carries_the_webhooks_request_id(
     assert r.status_code == 200 and r.headers["X-Request-ID"] == "tw-42"
     [(job, _, kwargs)] = desk.queue.jobs
     assert job == "handle_inbound" and kwargs["request_id"] == "tw-42"
+
+
+async def test_the_webhook_and_its_job_are_one_trace(
+    http: httpx.AsyncClient, desk: Desk, world: World
+) -> None:
+    """Module 7: one SMS is one trace, from the webhook through the worker."""
+    from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
+
+    from frontdesk_agent.config import Settings
+    from frontdesk_agent.services import run_job
+    from frontdesk_agent.tracing import init_tracing
+
+    exporter = InMemorySpanExporter()
+    init_tracing(Settings(), exporter=exporter)
+    r = await http.post("/v1/channels/sms", data=form(), headers=signed(form()))
+    assert r.status_code == 200
+    [(job, _, kwargs)] = desk.queue.jobs
+    assert "traceparent" in kwargs["trace"]
+    desk.llm.script(say("Hi! How can I help?"))
+    await run_job(desk.services, job, **kwargs)
+
+    spans = exporter.get_finished_spans()
+    names = {s.name for s in spans}
+    assert {"POST /v1/channels/sms", "job handle_inbound", "agent.turn"} <= names
+    assert len({s.context.trace_id for s in spans}) == 1
