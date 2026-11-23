@@ -173,6 +173,7 @@ def build_services(
             phone_window_s=settings.rate_phone_window_s,
             tenant_model_calls=settings.rate_tenant_model_calls,
             tenant_window_s=settings.rate_tenant_window_s,
+            tenant_daily_budget_usd=settings.tenant_daily_budget_usd,
         ),
     )
     services = Services(sessionmaker, frontdesk, sender, queue)

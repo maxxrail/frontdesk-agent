@@ -67,6 +67,8 @@ class Tenant(Base, IdAndTimestamps):
     # The SMS number clients text. Unique across tenants: an inbound message
     # is routed to a tenant by the number it was sent to (Module 4).
     sms_number: Mapped[str | None] = mapped_column(String(20), unique=True)
+    # Model spend allowed per local day; None uses the app-wide setting.
+    daily_budget_usd: Mapped[Decimal | None] = mapped_column(Numeric(10, 2))
 
 
 class Client(Base, TenantScoped):
@@ -299,6 +301,9 @@ class ReviewKind(enum.StrEnum):
     MONEY = "money"
     MEDICAL = "medical"
     ESCALATION = "escalation"  # the agent itself asked for a human
+    # Not a risk hold: the clinic's daily model budget is spent, so a fixed
+    # reply goes out at once and staff answer the rest (ADR 0019).
+    BUDGET = "budget"
 
 
 class ReviewStatus(enum.StrEnum):

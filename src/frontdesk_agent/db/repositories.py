@@ -355,6 +355,18 @@ class LLMCallRepository(TenantRepository[LLMCall]):
         stmt = self._scoped().order_by(LLMCall.created_at.desc(), LLMCall.id).limit(limit)
         return list((await self._session.execute(stmt)).scalars())
 
+    async def spent_today(self, timezone: str) -> Decimal:
+        """Model spend since local midnight in ``timezone``, in database time
+        like the rate limits, so a skewed app clock cannot reset the budget."""
+        midnight = func.timezone(
+            timezone, func.date_trunc("day", func.timezone(timezone, func.now()))
+        )
+        stmt = select(func.coalesce(func.sum(LLMCall.cost_usd), 0)).where(
+            LLMCall.tenant_id == self._tenant_id, LLMCall.created_at >= midnight
+        )
+        spent = (await self._session.execute(stmt)).scalar_one()
+        return Decimal(spent or 0)
+
     async def count_since(self, seconds: float) -> int:
         """Model calls in the last ``seconds`` of database time, for rate limits."""
         since = func.now() - func.make_interval(0, 0, 0, 0, 0, 0, seconds)

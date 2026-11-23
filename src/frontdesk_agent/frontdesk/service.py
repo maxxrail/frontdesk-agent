@@ -28,6 +28,7 @@ import logging
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime
+from decimal import Decimal
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -85,6 +86,9 @@ Outcome = str  # short label for logs and tests: "agent_reply", "held_for_review
 
 # How long a message waits when its tenant is over the model-call limit.
 TENANT_LIMIT_RETRY_S = 60
+# Sent when the clinic's daily model budget is spent. The medical holding text,
+# because the message it answers is unread and could be an emergency.
+BUDGET_HOLDING_MESSAGE = MEDICAL_HOLDING_MESSAGE
 
 
 @dataclass(frozen=True, slots=True)
@@ -95,6 +99,9 @@ class RateLimits:
     phone_window_s: int = 600
     tenant_model_calls: int = 1000
     tenant_window_s: int = 3600
+    # Model spend per clinic per local day before the canned reply takes over;
+    # a tenant's daily_budget_usd overrides it (ADR 0019).
+    tenant_daily_budget_usd: Decimal = Decimal("5.00")
 
 
 @dataclass
@@ -175,6 +182,21 @@ class FrontDesk:
                 message_id=str(msg.id),
             )
             return "rate_limited:tenant"
+
+        budget = tenant.daily_budget_usd
+        if budget is None:
+            budget = lim.tenant_daily_budget_usd
+        spent = await LLMCallRepository(session, tenant.id).spent_today(tenant.timezone)
+        if spent >= budget:
+            # Degrade, don't go silent: a fixed reply now, a person for the
+            # rest. The hold pauses the conversation, so later texts wait for
+            # staff instead of each making a review item.
+            reason = f"Daily model budget of ${budget} is spent (${spent:.2f} today)."
+            logger.warning("tenant over daily model budget", extra={"spent_usd": str(spent)})
+            self._hold(session, convo, msg, HeldAction(ReviewKind.BUDGET, reason), None)
+            self._text(effects, tenant, convo, client, BUDGET_HOLDING_MESSAGE)
+            await _audit_guardrail(session, convo, msg, "daily_budget", reason)
+            return "held_for_review:budget"
 
         if inbound_too_long(msg.body):
             reason = (

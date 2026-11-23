@@ -4,6 +4,7 @@ Never read a .env file in production; it exists for local development only.
 Secrets belong in the environment or a secret manager, never in git.
 """
 
+from decimal import Decimal
 from functools import lru_cache
 from typing import Literal
 
@@ -73,6 +74,9 @@ class Settings(BaseSettings):
     rate_phone_window_s: int = 600
     rate_tenant_model_calls: int = 1000
     rate_tenant_window_s: int = 3600
+    # Daily model spend per clinic (USD, local day) before replies degrade to
+    # a fixed text and staff take over (ADR 0019). A tenant row can override it.
+    tenant_daily_budget_usd: Decimal = Decimal("5.00")
 
     # Error reporting (Module 7). Empty: nothing is sent. Events are redacted
     # before sending (errortracking.py). SecretStr keeps it out of reprs.
