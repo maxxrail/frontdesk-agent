@@ -48,7 +48,7 @@ __all__ = [
 ]
 
 from frontdesk_agent import __version__
-from frontdesk_agent.llm.pricing import cost_usd
+from frontdesk_agent.llm.pricing import Usage, cost_of
 from frontdesk_agent.metrics import record_llm_call
 
 if TYPE_CHECKING:
@@ -143,7 +143,7 @@ class TracedLLMClient:
                 prompt_version=prompt_version,
                 max_tokens=max_tokens,
             )
-            _record(c, out.model, out.input_tokens, out.output_tokens, out.stop_reason)
+            _record(c, out, out.stop_reason)
             return out
 
     async def converse(
@@ -165,7 +165,7 @@ class TracedLLMClient:
                 prompt_version=prompt_version,
                 max_tokens=max_tokens,
             )
-            _record(c, out.model, out.input_tokens, out.output_tokens, out.stop_reason)
+            _record(c, out, out.stop_reason)
             c.span.set_attribute("llm.tool_calls", len(out.tool_calls))
             return out
 
@@ -192,15 +192,17 @@ def _llm_span(operation: str, prompt_name: str, prompt_version: str) -> Iterator
             raise
 
 
-def _record(c: _Call, model: str, input_tokens: int, output_tokens: int, stop: str | None) -> None:
+def _record(c: _Call, out: Usage, stop: str | None) -> None:
     """Span attributes and Prometheus numbers for one call, from the same
     values, so metrics work whether or not traces are exported."""
     seconds = time.perf_counter() - c.start
-    cost = cost_usd(model, input_tokens, output_tokens)
+    cost = cost_of(out)
     attrs: dict[str, Any] = {
-        "gen_ai.request.model": model,
-        "gen_ai.usage.input_tokens": input_tokens,
-        "gen_ai.usage.output_tokens": output_tokens,
+        "gen_ai.request.model": out.model,
+        "gen_ai.usage.input_tokens": out.input_tokens,
+        "gen_ai.usage.output_tokens": out.output_tokens,
+        "gen_ai.usage.cache_read_input_tokens": out.cache_read_tokens,
+        "gen_ai.usage.cache_creation_input_tokens": out.cache_write_tokens,
         "gen_ai.response.finish_reason": stop or "",
         "llm.latency_ms": round(seconds * 1000),
     }
@@ -208,10 +210,12 @@ def _record(c: _Call, model: str, input_tokens: int, output_tokens: int, stop: s
         attrs["llm.cost_usd"] = float(cost)
     c.span.set_attributes(attrs)
     record_llm_call(
-        model,
+        out.model,
         c.prompt,
         seconds=seconds,
-        input_tokens=input_tokens,
-        output_tokens=output_tokens,
+        input_tokens=out.input_tokens,
+        output_tokens=out.output_tokens,
+        cache_read_tokens=out.cache_read_tokens,
+        cache_write_tokens=out.cache_write_tokens,
         cost=cost,
     )

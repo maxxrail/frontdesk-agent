@@ -87,6 +87,8 @@ class AnthropicLLMClient:
             prompt_name=prompt_name,
             prompt_version=prompt_version,
             stop_reason=message.stop_reason,
+            cache_read_tokens=_cache_read(message.usage),
+            cache_write_tokens=_cache_write(message.usage),
         )
 
     async def converse(
@@ -127,6 +129,8 @@ class AnthropicLLMClient:
             latency_ms=int((time.perf_counter() - started) * 1000),
             prompt_name=prompt_name,
             prompt_version=prompt_version,
+            cache_read_tokens=_cache_read(response.usage),
+            cache_write_tokens=_cache_write(response.usage),
         )
 
     async def _create(self, **kwargs: Any) -> Any:
@@ -146,3 +150,12 @@ class AnthropicLLMClient:
             raise LLMError(str(exc)) from exc
         except anthropic.APIConnectionError as exc:
             raise LLMServerError(str(exc)) from exc
+
+
+# Prompt-cache counts; the API sends null (or nothing) when no cache was used.
+def _cache_read(usage: Any) -> int:
+    return int(getattr(usage, "cache_read_input_tokens", None) or 0)
+
+
+def _cache_write(usage: Any) -> int:
+    return int(getattr(usage, "cache_creation_input_tokens", None) or 0)

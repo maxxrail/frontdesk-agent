@@ -86,6 +86,8 @@ def record_llm_call(
     seconds: float,
     input_tokens: int = 0,
     output_tokens: int = 0,
+    cache_read_tokens: int = 0,
+    cache_write_tokens: int = 0,
     cost: Decimal | None = None,
     ok: bool = True,
 ) -> None:
@@ -95,6 +97,10 @@ def record_llm_call(
         LLM_TOKENS.labels(model, "input").inc(input_tokens)
     if output_tokens:
         LLM_TOKENS.labels(model, "output").inc(output_tokens)
+    if cache_read_tokens:
+        LLM_TOKENS.labels(model, "cache_read").inc(cache_read_tokens)
+    if cache_write_tokens:
+        LLM_TOKENS.labels(model, "cache_write").inc(cache_write_tokens)
     if cost:
         LLM_COST.labels(model, prompt).inc(float(cost))
 

@@ -12,7 +12,7 @@ from decimal import Decimal
 
 from frontdesk_agent.llm.base import LLMClient, LLMCompletion
 from frontdesk_agent.llm.messages import AgentTurn, Message, ToolSpec
-from frontdesk_agent.llm.pricing import cost_usd
+from frontdesk_agent.llm.pricing import Usage, cost_of
 
 
 class BudgetExceededError(RuntimeError):
@@ -44,13 +44,13 @@ class BudgetedClient:
         self.budget = budget
         self.allow_unpriced = allow_unpriced  # only the fake model has no price
 
-    def _add(self, model: str, prompt_name: str, tokens_in: int, tokens_out: int) -> None:
-        cost = cost_usd(model, tokens_in, tokens_out)
+    def _add(self, call: Usage, prompt_name: str) -> None:
+        cost = cost_of(call)
         if cost is None:
             if not self.allow_unpriced:
                 # Without a price the cap means nothing; stop rather than guess.
                 self.budget.spent_usd = self.budget.cap_usd
-                raise BudgetExceededError(f"no price for model {model!r} in llm/pricing.py")
+                raise BudgetExceededError(f"no price for model {call.model!r} in llm/pricing.py")
             cost = Decimal(0)
         self.budget.add(cost, prompt_name)
 
@@ -71,7 +71,7 @@ class BudgetedClient:
             prompt_version=prompt_version,
             max_tokens=max_tokens,
         )
-        self._add(out.model, prompt_name, out.input_tokens, out.output_tokens)
+        self._add(out, prompt_name)
         return out
 
     async def converse(
@@ -93,5 +93,5 @@ class BudgetedClient:
             prompt_version=prompt_version,
             max_tokens=max_tokens,
         )
-        self._add(turn.model, prompt_name, turn.input_tokens, turn.output_tokens)
+        self._add(turn, prompt_name)
         return turn

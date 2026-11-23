@@ -47,6 +47,9 @@ class LLMCompletion:
     prompt_name: str
     prompt_version: str
     stop_reason: str | None = None
+    # Prompt-cache tokens, billed apart from input_tokens (which excludes them).
+    cache_read_tokens: int = 0
+    cache_write_tokens: int = 0
 
 
 @runtime_checkable

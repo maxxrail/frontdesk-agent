@@ -160,6 +160,9 @@ class LLMCall(Base, TenantScoped):
     prompt_version: Mapped[str] = mapped_column(String(20))
     input_tokens: Mapped[int] = mapped_column(Integer)
     output_tokens: Mapped[int] = mapped_column(Integer)
+    # Prompt-cache tokens (Module 7), billed apart from input_tokens.
+    cache_read_tokens: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    cache_write_tokens: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     latency_ms: Mapped[int] = mapped_column(Integer)
     cost_usd: Mapped[Decimal | None] = mapped_column(Numeric(12, 6))
     stop_reason: Mapped[str | None] = mapped_column(String(40))

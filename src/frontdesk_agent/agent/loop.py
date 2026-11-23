@@ -26,7 +26,7 @@ from frontdesk_agent.llm.messages import (
     ToolResultBlock,
     ToolUseBlock,
 )
-from frontdesk_agent.llm.pricing import cost_usd
+from frontdesk_agent.llm.pricing import cost_of
 from frontdesk_agent.llm.retry import RetryPolicy, with_retries
 from frontdesk_agent.metrics import TURN_COST
 from frontdesk_agent.prompts import load_prompt
@@ -147,7 +147,7 @@ async def _run(
             )
 
         turn = await with_retries(call, policy)
-        cost = cost_usd(turn.model, turn.input_tokens, turn.output_tokens)
+        cost = cost_of(turn)
         run.cost_usd += cost or Decimal(0)
         await LLMCallRepository(ctx.session, ctx.tenant.id).record(
             _as_completion(turn), cost_usd=cost
@@ -188,6 +188,8 @@ def _as_completion(turn: AgentTurn) -> LLMCompletion:
         prompt_name=turn.prompt_name,
         prompt_version=turn.prompt_version,
         stop_reason=turn.stop_reason,
+        cache_read_tokens=turn.cache_read_tokens,
+        cache_write_tokens=turn.cache_write_tokens,
     )
 
 

@@ -342,6 +342,8 @@ class LLMCallRepository(TenantRepository[LLMCall]):
                 prompt_version=completion.prompt_version,
                 input_tokens=completion.input_tokens,
                 output_tokens=completion.output_tokens,
+                cache_read_tokens=completion.cache_read_tokens,
+                cache_write_tokens=completion.cache_write_tokens,
                 latency_ms=completion.latency_ms,
                 stop_reason=completion.stop_reason,
                 cost_usd=cost_usd,

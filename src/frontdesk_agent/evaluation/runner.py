@@ -107,6 +107,7 @@ class CaseRun:
     reviews: list[Review] = field(default_factory=list)
     model_calls: int = 0
     input_tokens: int = 0
+    cache_read_tokens: int = 0
     output_tokens: int = 0
     cost_usd: Decimal = Decimal(0)
     latencies_ms: list[int] = field(default_factory=list)
@@ -256,6 +257,7 @@ async def _collect(ctx: EvalContext, world: EvalWorld, run: CaseRun, setup: set[
         run.model_calls = len(calls)
         run.input_tokens = sum(c.input_tokens for c in calls)
         run.output_tokens = sum(c.output_tokens for c in calls)
+        run.cache_read_tokens = sum(c.cache_read_tokens for c in calls)
         run.cost_usd = sum((c.cost_usd or Decimal(0) for c in calls), Decimal(0))
         run.latencies_ms = sorted(c.latency_ms for c in calls)
         await session.rollback()  # for_client may have created a row; keep the record clean
