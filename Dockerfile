@@ -2,16 +2,18 @@
 
 FROM python:3.12-slim AS builder
 
-ENV PIP_DISABLE_PIP_VERSION_CHECK=1 \
-    PIP_NO_CACHE_DIR=1
+# Install from uv.lock, never by resolving afresh: `pip install .` once pulled
+# sentry-sdk 3.0 into the image (the lock has 2.75) and the app no longer
+# started. The image must run exactly what the tests ran.
+COPY --from=ghcr.io/astral-sh/uv:0.13.8 /uv /bin/uv
+ENV UV_COMPILE_BYTECODE=1     UV_LINK_MODE=copy     UV_PYTHON_DOWNLOADS=never     UV_PROJECT_ENVIRONMENT=/opt/venv
 
 WORKDIR /build
-COPY pyproject.toml README.md ./
+COPY pyproject.toml uv.lock README.md ./
+# Dependencies first, in their own layer, so a code change does not reinstall them.
+RUN uv sync --frozen --no-install-project --no-editable
 COPY src ./src
-
-RUN python -m venv /opt/venv \
-    && /opt/venv/bin/pip install --upgrade pip \
-    && /opt/venv/bin/pip install .
+RUN uv sync --frozen --no-editable
 
 # ---
 
