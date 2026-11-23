@@ -83,10 +83,12 @@ class BudgetedClient:
         prompt_name: str,
         prompt_version: str,
         max_tokens: int = 1024,
+        context: str = "",
     ) -> AgentTurn:
         self.budget.check()
         turn = await self.inner.converse(
             system=system,
+            context=context,
             messages=messages,
             tools=tools,
             prompt_name=prompt_name,

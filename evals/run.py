@@ -81,6 +81,7 @@ class CannedClient:
         prompt_name: str,
         prompt_version: str,
         max_tokens: int = 1024,
+        context: str = "",
     ) -> AgentTurn:
         return AgentTurn(
             [TextBlock("Thanks for your message. A team member will follow up.")],

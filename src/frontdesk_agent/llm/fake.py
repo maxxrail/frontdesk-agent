@@ -104,10 +104,12 @@ class FakeLLMClient:
         prompt_name: str,
         prompt_version: str,
         max_tokens: int = 1024,
+        context: str = "",
     ) -> AgentTurn:
         self.conversations.append(
             {
                 "system": system,
+                "context": context,
                 "messages": [m.to_json() for m in messages],
                 "tools": [t.name for t in tools],
             }

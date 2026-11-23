@@ -55,6 +55,7 @@ class ToolReadingFake:
         prompt_name: str,
         prompt_version: str,
         max_tokens: int = 1024,
+        context: str = "",
     ) -> AgentTurn:
         last = messages[-1].content[-1]
         text = "tomorrow at 2" in str(messages[-1].content).lower()

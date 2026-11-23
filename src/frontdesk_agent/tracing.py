@@ -155,10 +155,12 @@ class TracedLLMClient:
         prompt_name: str,
         prompt_version: str,
         max_tokens: int = 1024,
+        context: str = "",
     ) -> "AgentTurn":
         with _llm_span("converse", prompt_name, prompt_version) as c:
             out = await self._inner.converse(
                 system=system,
+                context=context,
                 messages=messages,
                 tools=tools,
                 prompt_name=prompt_name,

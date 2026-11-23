@@ -81,6 +81,12 @@ class LLMClient(Protocol):
         prompt_name: str,
         prompt_version: str,
         max_tokens: int = 1024,
+        context: str = "",
     ) -> "AgentTurn":
-        """One step of a tool-using conversation (Module 4's agent loop)."""
+        """One step of a tool-using conversation (Module 4's agent loop).
+
+        ``system`` is the same for every message to one clinic, so a provider
+        may cache it (with the tools); ``context`` is the part that changes per
+        message (who is texting, the time) and is sent after it, uncached.
+        """
         ...

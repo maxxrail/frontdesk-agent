@@ -52,17 +52,18 @@ class AgentRun:
     cost_usd: Decimal = Decimal(0)  # every model call in this run, priced
 
 
-def system_prompt(ctx: ToolContext, prompt_version: str = PROMPT_VERSION) -> str:
+def system_prompt(ctx: ToolContext, prompt_version: str = PROMPT_VERSION) -> tuple[str, str]:
+    """(system, context): the first is the same for every message to one
+    clinic and can be cached; the second names the client and the time."""
     c = ctx.client
     label = f"{c.first_name} {c.last_name}".strip() or "a new client with no name on file"
-    system, _ = load_prompt(PROMPT_NAME, prompt_version).render(
+    return load_prompt(PROMPT_NAME, prompt_version).render_with_context(
         business_name=ctx.tenant.name,
         business_type=ctx.tenant.business_type,
         client_label=label,
         now_local=human_datetime(ctx.now.astimezone(ctx.tz), with_year=True),
         timezone=ctx.tenant.timezone,
     )
-    return system
 
 
 # Appended to the system prompt in read-only mode. The prompt tells the agent
@@ -128,7 +129,8 @@ async def _run(
     allowed = frozenset(n for n, t in TOOLS.items() if t.read_only or not read_only)
     specs = [TOOLS[n].spec for n in TOOLS if n in allowed]
     ctx.documents_in_context = ctx.documents_in_context or _read_documents(history)
-    system = system_prompt(ctx, prompt_version) + (READ_ONLY_NOTE if read_only else "")
+    system, context = system_prompt(ctx, prompt_version)
+    system += READ_ONLY_NOTE if read_only else ""
     messages = list(history)
     run = AgentRun(reply=None, stopped="step_limit", steps=0)
     policy = retry_policy or RetryPolicy()
@@ -139,6 +141,7 @@ async def _run(
         async def call() -> AgentTurn:
             return await llm.converse(
                 system=system,
+                context=context,
                 messages=messages,
                 tools=specs,
                 prompt_name=PROMPT_NAME,

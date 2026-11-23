@@ -100,12 +100,13 @@ class AnthropicLLMClient:
         prompt_name: str,
         prompt_version: str,
         max_tokens: int = 1024,
+        context: str = "",
     ) -> AgentTurn:
         started = time.perf_counter()
         response = await self._create(
             model=self._model,
             max_tokens=max_tokens,
-            system=system,
+            system=_system_blocks(system, context),
             messages=[m.to_json() for m in messages],
             tools=[
                 {"name": t.name, "description": t.description, "input_schema": t.input_schema}
@@ -159,3 +160,18 @@ def _cache_read(usage: Any) -> int:
 
 def _cache_write(usage: Any) -> int:
     return int(getattr(usage, "cache_creation_input_tokens", None) or 0)
+
+
+def _system_blocks(system: str, context: str) -> list[dict[str, Any]]:
+    """The system prompt with a cache breakpoint after it, then the context.
+
+    Tools render before the system prompt, so the one breakpoint caches both.
+    A prefix shorter than the model's minimum (4,096 tokens on Haiku 4.5, 512
+    on Haiku 5.5) is simply not cached, at no extra charge (ADR 0019).
+    """
+    blocks: list[dict[str, Any]] = [
+        {"type": "text", "text": system, "cache_control": {"type": "ephemeral"}}
+    ]
+    if context:
+        blocks.append({"type": "text", "text": context})
+    return blocks
