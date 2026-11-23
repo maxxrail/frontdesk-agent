@@ -71,7 +71,10 @@ Done when:
 
 Needs Maxx: enabling Dependabot and secret scanning in the GitHub repo settings.
 
-## Module 7: Observability, cost and latency (v0.7)
+## Module 7: Observability, cost and latency (v0.7) ✅
+
+Done in v0.7.0 (PR #23). How to read it: `docs/observability.md`; decisions: ADR 0019-0020;
+load test: `loadtest/README.md`. The short real-model load test was not run (see the PR).
 
 Answer what a conversation cost, how slow the slowest were, and why one failed.
 

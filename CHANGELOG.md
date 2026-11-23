@@ -5,6 +5,54 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-11-23
+
+Module 7: observability, cost and latency.
+
+### Added
+
+- Sentry for exceptions, redacted with the same rules as the logs before
+  anything is sent. New dependency: sentry-sdk.
+- JSON logs with request, job, tenant, conversation and trace ids on every
+  line.
+- OpenTelemetry traces: one SMS is one trace, from the webhook through the
+  queued job to every model call (tokens, cache, latency, cost) and tool
+  call. Searchable in Jaeger by `conversation.id` (`docs/observability.md`).
+  New dependencies: opentelemetry-api, -sdk and -exporter-otlp-proto-http.
+- Prometheus metrics, three SLOs with one alert each (`docs/slo.md`,
+  tested with `promtool` in CI), and a Grafana dashboard. New dependency:
+  prometheus-client.
+- Cost controls (ADR 0019): lookup-only agent steps run on Haiku 5.5
+  (`FDA_LLM_LOOKUP_MODEL`), every reply and action stays on Haiku 4.5;
+  prompt caching for the tools and rules, with the per-message part moved
+  to a new `# Context` prompt section; cache tokens recorded and priced in
+  `llm_calls`. Agent cost per conversation fell 17% ($0.0053 to $0.0044).
+- A daily model budget per clinic (`FDA_TENANT_DAILY_BUDGET_USD`, $5, or
+  `tenants.daily_budget_usd`): over it, the client gets the fixed holding
+  text and staff a `budget` review item, with no model call.
+- An outbox for outbound SMS (ADR 0020): texts commit with the change they
+  report and are swept if a crash leaves them unsent.
+- A Locust load test (`loadtest/`), with a free fake model
+  (`FDA_LLM_PROVIDER=fake`, refused in production). New dev dependency:
+  locust.
+- The eval workflow takes `lookup_model` (`off` to compare) and skips
+  Dependabot PRs, which get no secrets.
+
+### Changed
+
+- Prompt `agent/v3`: bookings, moves and cancellations are only for the
+  person texting; a parent booking for a child goes to staff (#22). Three
+  new red-team cases.
+- With Redis down, the API runs jobs itself instead of failing the webhook,
+  whose Twilio retry would have queued nothing.
+
+### Fixed
+
+- The Docker image ignored `uv.lock` and installed sentry-sdk 3.0, which
+  crashed the app at startup with a DSN set. It now builds from the lock.
+- The console SMS sender gave every text the same provider id, breaking a
+  unique index from the second text on.
+
 ## [0.6.0] - 2026-11-19
 
 Module 6: guardrails, security and privacy.

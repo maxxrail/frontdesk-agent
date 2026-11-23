@@ -31,8 +31,10 @@ watches latency. The time covers the agent turn up to the reply or the hold;
 SMS delivery by the carrier is outside it.
 
 **99.5% for the webhook.** The webhook only verifies, stores and queues, so
-it should almost never fail; a 5xx makes Twilio retry, and a stored message
-is never lost. At a clinic's volume (hundreds of texts a day) 0.5% is one or
+it should almost never fail. A 5xx makes Twilio retry, but the retry is a
+duplicate that queues nothing, so a message stored before the failure would
+wait for a person; with Redis down the API now runs the job itself rather
+than fail (ADR 0020). At a clinic's volume (hundreds of texts a day) 0.5% is one or
 two failures a day before the alert fires.
 
 **98% for model calls.** Counted after the client's own retries (`llm/retry.py`),
