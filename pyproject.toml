@@ -36,6 +36,7 @@ dev = [
     "mypy>=1.10",
     "pre-commit>=3.7",
     "faker>=25",
+    "locust>=2.32",
 ]
 
 [build-system]
@@ -55,7 +56,7 @@ select = ["E", "F", "I", "UP", "B", "SIM", "ASYNC"]
 [tool.mypy]
 python_version = "3.12"
 strict = true
-files = ["src", "tests", "scripts", "migrations", "evals"]
+files = ["src", "tests", "scripts", "migrations", "evals", "loadtest"]
 mypy_path = "src"
 
 [[tool.mypy.overrides]]
