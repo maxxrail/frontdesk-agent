@@ -1,0 +1,22 @@
+# Load-test mode, layered on docker-compose.yml:
+#   docker compose -f docker-compose.yml -f loadtest/compose.loadtest.yml up -d --build
+# The fake model answers every turn for free; texts are printed, never sent.
+# Values set here override .env, so a Twilio or Anthropic key in .env is unused.
+x-loadtest-env: &loadtest-env
+  FDA_LLM_PROVIDER: fake
+  FDA_SMS_SENDER: console
+  FDA_TWILIO_ACCOUNT_SID: ""
+  FDA_TWILIO_AUTH_TOKEN: loadtest-not-a-secret
+  FDA_PUBLIC_BASE_URL: http://localhost:8000
+  # 50 clients for a few minutes is far below a day's budget, but the fake
+  # model has no price, so keep the guard from mattering either way.
+  FDA_TENANT_DAILY_BUDGET_USD: "1000"
+  FDA_RATE_TENANT_MODEL_CALLS: "100000"
+
+services:
+  api:
+    environment:
+      <<: *loadtest-env
+  worker:
+    environment:
+      <<: *loadtest-env

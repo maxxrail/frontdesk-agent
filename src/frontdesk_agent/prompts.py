@@ -1,7 +1,9 @@
 """Loading and rendering versioned prompt files.
 
 Prompts live in prompts/<name>/<version>.md with front matter and two
-sections: `# System` and `# User`. Keeping them on disk means a prompt change
+sections: `# System` and `# User`, plus an optional `# Context`: the part of
+the system prompt that changes per message, kept apart so the rest can be
+cached. Keeping them on disk means a prompt change
 shows up as a reviewable diff.
 """
 
@@ -33,6 +35,7 @@ class Prompt:
     version: str
     system: str
     user: str
+    context: str = ""
 
     def render(self, **values: str) -> tuple[str, str]:
         """Substitute placeholders in both sections.
@@ -51,15 +54,21 @@ class Prompt:
             rendered.append(out.strip())
         return rendered[0], rendered[1]
 
+    def render_with_context(self, **values: str) -> tuple[str, str]:
+        """(system, context), each rendered; the user section is not used."""
+        system, _ = self.render(**values)
+        context, _ = Prompt(self.name, self.version, self.context, "").render(**values)
+        return system, context
 
-def _split_sections(body: str, name: str, version: str) -> tuple[str, str]:
-    parts = re.split(r"^# (System|User)\s*$", body, flags=re.MULTILINE)
+
+def _split_sections(body: str, name: str, version: str) -> tuple[str, str, str]:
+    parts = re.split(r"^# (System|Context|User)\s*$", body, flags=re.MULTILINE)
     sections: dict[str, str] = {}
     for i in range(1, len(parts) - 1, 2):
         sections[parts[i].lower()] = parts[i + 1]
     if "system" not in sections or "user" not in sections:
         raise PromptError(f"{name}/{version}: needs both '# System' and '# User' sections")
-    return sections["system"], sections["user"]
+    return sections["system"], sections["user"], sections.get("context", "")
 
 
 @lru_cache
@@ -71,5 +80,5 @@ def load_prompt(name: str, version: str, prompts_dir: Path | None = None) -> Pro
         raise PromptError(f"No prompt file at {path}")
 
     raw = _FRONT_MATTER.sub("", path.read_text(encoding="utf-8"))
-    system, user = _split_sections(raw, name, version)
-    return Prompt(name=name, version=version, system=system.strip(), user=user.strip())
+    system, user, context = _split_sections(raw, name, version)
+    return Prompt(name, version, system.strip(), user.strip(), context.strip())

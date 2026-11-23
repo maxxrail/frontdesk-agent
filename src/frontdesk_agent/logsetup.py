@@ -21,6 +21,8 @@ import re
 import sys
 from typing import Any
 
+from frontdesk_agent import logcontext
+
 PHONE_MASK = "[phone]"
 FIELD_MASK = "[redacted]"
 
@@ -64,15 +66,18 @@ def redact(text: str) -> str:
     return _PHONE.sub(PHONE_MASK, text)
 
 
-def _clean(key: str, value: Any) -> Any:
+def scrub(key: str, value: Any) -> Any:
+    """Redact one field: personal keys replaced whole, phone numbers masked in
+    every string, recursively. Shared by the log formatter and the Sentry
+    hook (errortracking.py), so both apply exactly the same rules."""
     if key.lower() in SENSITIVE_FIELDS:
         return FIELD_MASK
     if isinstance(value, str):
         return redact(value)
     if isinstance(value, dict):
-        return {k: _clean(str(k), v) for k, v in value.items()}
+        return {k: scrub(str(k), v) for k, v in value.items()}
     if isinstance(value, list | tuple):
-        return [_clean(key, v) for v in value]
+        return [scrub(key, v) for v in value]
     return value
 
 
@@ -85,10 +90,12 @@ class RedactingFormatter(logging.Formatter):
             "level": record.levelname,
             "logger": record.name,
             "message": redact(record.getMessage()),
+            # request_id, job, tenant_id, conversation_id: see logcontext.py.
+            **logcontext.current(),
         }
         for key, value in vars(record).items():
             if key not in _STANDARD and not key.startswith("_"):
-                out[key] = _clean(key, value)
+                out[key] = scrub(key, value)
         if record.exc_info:
             out["exception"] = redact(self.formatException(record.exc_info))
         if record.stack_info:

@@ -20,6 +20,7 @@ from frontdesk_agent.db.repositories import TenantDirectory
 from frontdesk_agent.dependencies import get_services
 from frontdesk_agent.frontdesk.service import accept_inbound
 from frontdesk_agent.services import Services
+from frontdesk_agent.tracing import carrier
 
 router = APIRouter(prefix="/v1/channels", tags=["channels"])
 
@@ -67,6 +68,10 @@ async def inbound_sms(
     await session.commit()
     if msg is not None:  # None: Twilio retried a message we already have
         await services.queue.enqueue(
-            "handle_inbound", tenant_id=str(tenant.id), message_id=str(msg.id)
+            "handle_inbound",
+            tenant_id=str(tenant.id),
+            message_id=str(msg.id),
+            request_id=request.state.request_id,  # the job's logs join this request's
+            trace=carrier(),  # and its spans join this request's trace
         )
     return Response(EMPTY_TWIML, media_type="application/xml")

@@ -17,6 +17,7 @@ from frontdesk_agent.db.models import PolicyChunk, PolicyDocument
 from frontdesk_agent.db.repositories import TenantRepository
 from frontdesk_agent.retrieval.chunking import ChunkingConfig, chunk_document, parse_markdown
 from frontdesk_agent.retrieval.embeddings import Embedder
+from frontdesk_agent.tracing import tracer
 
 SearchMode = Literal["vector", "keyword", "hybrid"]
 
@@ -124,11 +125,18 @@ class PolicyStore(TenantRepository[PolicyChunk]):
     async def search(
         self, query: str, *, k: int = 5, mode: SearchMode = "hybrid"
     ) -> list[SearchHit]:
-        if mode == "vector":
-            return (await self._vector(query, k))[:k]
-        if mode == "keyword":
-            return (await self._keyword(query, k))[:k]
-        return await self._hybrid(query, k)
+        # The query is client text, so it is not an attribute; counts are.
+        with tracer.start_as_current_span("retrieval.search") as span:
+            if mode == "vector":
+                hits = (await self._vector(query, k))[:k]
+            elif mode == "keyword":
+                hits = (await self._keyword(query, k))[:k]
+            else:
+                hits = await self._hybrid(query, k)
+            span.set_attributes(
+                {"retrieval.mode": mode, "retrieval.k": k, "retrieval.hits": len(hits)}
+            )
+            return hits
 
     async def _vector(self, query: str, limit: int) -> list[SearchHit]:
         [qvec] = self._embedder.embed([query])

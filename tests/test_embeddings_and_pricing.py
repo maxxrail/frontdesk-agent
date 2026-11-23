@@ -42,3 +42,16 @@ def test_costs() -> None:
     assert cost_usd("claude-haiku-5-5", 200_000, 0) == Decimal("0.100000")  # long-prompt tier
     assert cost_usd("claude-sonnet-5-5", 0, 1_000_000) == Decimal("10.000000")
     assert cost_usd("some-other-model", 10, 10) is None
+
+
+def test_cache_tokens_are_priced_from_the_input_rate() -> None:
+    """Writes cost 1.25x input and reads 0.1x (0.05x on Sonnet 5.5), from the
+    pricing page as of 2026-11-23. A cost that ignored them would make every
+    cached call look nearly free, or leave out the write premium."""
+    h45 = "claude-haiku-4-5-20251001"
+    assert cost_usd(h45, 0, 0, cache_write_tokens=1_000_000) == Decimal("1.250000")
+    assert cost_usd(h45, 0, 0, cache_read_tokens=1_000_000) == Decimal("0.100000")
+    assert cost_usd("claude-haiku-5-5", 0, 0, cache_read_tokens=100_000) == Decimal("0.001000")
+    assert cost_usd("claude-sonnet-5-5", 0, 0, cache_read_tokens=1_000_000) == Decimal("0.100000")
+    # Cache reads count toward Haiku 5.5's 100K long-prompt threshold.
+    assert cost_usd("claude-haiku-5-5", 1_000, 0, cache_read_tokens=100_000) == Decimal("0.005500")

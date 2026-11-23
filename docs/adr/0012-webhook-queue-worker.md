@@ -44,6 +44,8 @@ from one client cannot interleave and corrupt the transcript.
   every job would have failed in production with "function not found".
 - If the process dies after sending a text but before logging it, the log
   misses one row. An outbox table would close that; it is noted for Module 7.
+  (Closed by ADR 0020, which also fixed a worse case: with Redis down, the
+  webhook's enqueue failed after the message was stored.)
 - A message that is exactly `CANCEL` is an opt-out keyword to Twilio, so it
   never becomes a cancellation request. Clients write "cancel my
   appointment"; the README says how to change Twilio's keywords.

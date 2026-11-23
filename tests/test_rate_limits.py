@@ -72,7 +72,7 @@ async def test_a_staff_decision_starts_a_fresh_window(desk: Desk, world: World) 
         await desk.services.frontdesk.decide(
             s, world.tenant_id, item.id, effects, approve=False, reply=None, reviewer="sam"
         )
-        await s.commit()
+        await effects.commit(s)
         await effects.flush(s, desk.sender, desk.queue)
 
     desk.llm.script(say("Thanks for waiting, how can I help?"))

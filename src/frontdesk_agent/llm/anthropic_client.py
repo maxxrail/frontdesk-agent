@@ -87,6 +87,8 @@ class AnthropicLLMClient:
             prompt_name=prompt_name,
             prompt_version=prompt_version,
             stop_reason=message.stop_reason,
+            cache_read_tokens=_cache_read(message.usage),
+            cache_write_tokens=_cache_write(message.usage),
         )
 
     async def converse(
@@ -98,12 +100,13 @@ class AnthropicLLMClient:
         prompt_name: str,
         prompt_version: str,
         max_tokens: int = 1024,
+        context: str = "",
     ) -> AgentTurn:
         started = time.perf_counter()
         response = await self._create(
             model=self._model,
             max_tokens=max_tokens,
-            system=system,
+            system=_system_blocks(system, context),
             messages=[m.to_json() for m in messages],
             tools=[
                 {"name": t.name, "description": t.description, "input_schema": t.input_schema}
@@ -127,6 +130,8 @@ class AnthropicLLMClient:
             latency_ms=int((time.perf_counter() - started) * 1000),
             prompt_name=prompt_name,
             prompt_version=prompt_version,
+            cache_read_tokens=_cache_read(response.usage),
+            cache_write_tokens=_cache_write(response.usage),
         )
 
     async def _create(self, **kwargs: Any) -> Any:
@@ -146,3 +151,27 @@ class AnthropicLLMClient:
             raise LLMError(str(exc)) from exc
         except anthropic.APIConnectionError as exc:
             raise LLMServerError(str(exc)) from exc
+
+
+# Prompt-cache counts; the API sends null (or nothing) when no cache was used.
+def _cache_read(usage: Any) -> int:
+    return int(getattr(usage, "cache_read_input_tokens", None) or 0)
+
+
+def _cache_write(usage: Any) -> int:
+    return int(getattr(usage, "cache_creation_input_tokens", None) or 0)
+
+
+def _system_blocks(system: str, context: str) -> list[dict[str, Any]]:
+    """The system prompt with a cache breakpoint after it, then the context.
+
+    Tools render before the system prompt, so the one breakpoint caches both.
+    A prefix shorter than the model's minimum (4,096 tokens on Haiku 4.5, 512
+    on Haiku 5.5) is simply not cached, at no extra charge (ADR 0019).
+    """
+    blocks: list[dict[str, Any]] = [
+        {"type": "text", "text": system, "cache_control": {"type": "ephemeral"}}
+    ]
+    if context:
+        blocks.append({"type": "text", "text": context})
+    return blocks

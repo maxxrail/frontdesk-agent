@@ -80,6 +80,8 @@ class LLMCallOut(_Out):
     prompt_version: str
     input_tokens: int
     output_tokens: int
+    cache_read_tokens: int
+    cache_write_tokens: int
     latency_ms: int
     cost_usd: Decimal | None
     succeeded: bool

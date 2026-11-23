@@ -4,6 +4,7 @@ One place decides which LLM client the application uses, so tests can swap in
 the fake with a single dependency override.
 """
 
+from collections.abc import Callable
 from functools import lru_cache
 from typing import TYPE_CHECKING, Any
 
@@ -19,7 +20,24 @@ from frontdesk_agent.retrieval.embeddings import default_embedder
 @lru_cache
 def get_llm_client() -> LLMClient:
     """Build the real provider client from settings."""
+    return _client(get_settings().llm_model)
+
+
+@lru_cache
+def get_lookup_llm_client() -> LLMClient | None:
+    """The cheap model for the agent's lookup steps, or None when routing is off."""
+    model = get_settings().llm_lookup_model
+    return _client(model) if model else None
+
+
+def _client(model: str) -> LLMClient:
     settings = get_settings()
+    from frontdesk_agent.tracing import TracedLLMClient
+
+    if settings.llm_provider == "fake":
+        from frontdesk_agent.llm.fake import CannedLLMClient
+
+        return TracedLLMClient(CannedLLMClient(latency_s=settings.llm_fake_latency_s))
     if not settings.anthropic_api_key:
         raise LLMConfigurationError(
             "FDA_ANTHROPIC_API_KEY is not set. Copy .env.example to .env and add your key."
@@ -27,10 +45,13 @@ def get_llm_client() -> LLMClient:
 
     from frontdesk_agent.llm.anthropic_client import AnthropicLLMClient
 
-    return AnthropicLLMClient(
-        api_key=settings.anthropic_api_key,
-        model=settings.llm_model,
-        timeout_s=settings.llm_timeout_s,
+    # Every model call made through the app is a span (tracing.py).
+    return TracedLLMClient(
+        AnthropicLLMClient(
+            api_key=settings.anthropic_api_key,
+            model=model,
+            timeout_s=settings.llm_timeout_s,
+        )
     )
 
 
@@ -55,11 +76,20 @@ class LazyLLMClient:
     """Resolves the real client on first use, so the API starts, and the SMS
     webhook stores messages, even before an API key is configured."""
 
+    def __init__(self, resolve: Callable[[], LLMClient | None] = get_llm_client) -> None:
+        self._resolve = resolve
+
+    def _get(self) -> LLMClient:
+        client = self._resolve()
+        if client is None:  # pragma: no cover - only built when a model is set
+            raise LLMConfigurationError("no model configured for this client")
+        return client
+
     async def complete(self, **kwargs: Any) -> Any:
-        return await get_llm_client().complete(**kwargs)
+        return await self._get().complete(**kwargs)
 
     async def converse(self, **kwargs: Any) -> Any:
-        return await get_llm_client().converse(**kwargs)
+        return await self._get().converse(**kwargs)
 
 
 def get_services(request: Request) -> "Services":

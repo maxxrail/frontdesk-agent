@@ -98,6 +98,9 @@ class AgentTurn:
     prompt_name: str
     prompt_version: str
     extra: dict[str, Any] = field(default_factory=dict)
+    # Prompt-cache tokens, billed apart from input_tokens (which excludes them).
+    cache_read_tokens: int = 0
+    cache_write_tokens: int = 0
 
     @property
     def tool_calls(self) -> list[ToolUseBlock]:

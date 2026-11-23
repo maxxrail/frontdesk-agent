@@ -104,10 +104,12 @@ class FakeLLMClient:
         prompt_name: str,
         prompt_version: str,
         max_tokens: int = 1024,
+        context: str = "",
     ) -> AgentTurn:
         self.conversations.append(
             {
                 "system": system,
+                "context": context,
                 "messages": [m.to_json() for m in messages],
                 "tools": [t.name for t in tools],
             }
@@ -126,6 +128,59 @@ class FakeLLMClient:
             input_tokens=sum(len(str(m.to_json()).split()) for m in messages),
             output_tokens=10,
             latency_ms=self._latency_ms,
+            prompt_name=prompt_name,
+            prompt_version=prompt_version,
+        )
+
+
+class CannedLLMClient:
+    """For load tests, not unit tests: every agent turn looks up the client's
+    appointments, then replies with fixed text, each step after
+    ``latency_s`` (about a real model call). Free, so a load test measures
+    the system, not the provider."""
+
+    model = "fake-model"
+
+    def __init__(self, *, latency_s: float = 0.9) -> None:
+        self._latency_s = latency_s
+
+    async def complete(
+        self,
+        *,
+        system: str,
+        user: str,
+        prompt_name: str,
+        prompt_version: str,
+        max_tokens: int = 1024,
+    ) -> LLMCompletion:
+        await asyncio.sleep(self._latency_s)
+        text = '{"answerable": false, "answer": "", "citations": []}'
+        return LLMCompletion(text, self.model, len(user) // 4, 20, 1, prompt_name, prompt_version)
+
+    async def converse(
+        self,
+        *,
+        system: str,
+        messages: list[Message],
+        tools: list[ToolSpec],
+        prompt_name: str,
+        prompt_version: str,
+        max_tokens: int = 1024,
+        context: str = "",
+    ) -> AgentTurn:
+        await asyncio.sleep(self._latency_s)
+        last = messages[-1].content
+        looked_up = any(not isinstance(b, TextBlock) for b in last)
+        content: list[Block] = (
+            say("Thanks, you're all set.") if looked_up else [call("list_my_appointments")]
+        )
+        return AgentTurn(
+            content=content,
+            stop_reason="end_turn" if looked_up else "tool_use",
+            model=self.model,
+            input_tokens=sum(len(str(m.to_json())) // 4 for m in messages),
+            output_tokens=20,
+            latency_ms=int(self._latency_s * 1000),
             prompt_name=prompt_name,
             prompt_version=prompt_version,
         )

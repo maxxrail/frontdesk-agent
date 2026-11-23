@@ -41,8 +41,10 @@ from frontdesk_agent.db.repositories import (
 )
 from frontdesk_agent.guardrails import clean_untrusted
 from frontdesk_agent.llm.messages import ToolSpec
+from frontdesk_agent.metrics import TOOL_CALLS
 from frontdesk_agent.retrieval.embeddings import Embedder
 from frontdesk_agent.retrieval.store import PolicyStore
+from frontdesk_agent.tracing import Status, StatusCode, tracer
 
 MAX_DAYS_AHEAD = 60
 MAX_SLOTS_SHOWN = 8
@@ -429,14 +431,16 @@ async def execute(
     a tool the model was not offered, invalid input, a business error, a
     held action, or success."""
     held_before = len(ctx.held)
-    outcome = await _execute(ctx, name, raw, allowed)
-    if outcome.is_error:
-        rejected = outcome.content.startswith(
-            ('{"error": "Unknown tool', '{"error": "Invalid input')
-        )
-        status = "rejected" if rejected else "error"
-    else:
-        status = "held" if len(ctx.held) > held_before else "ok"
+    with tracer.start_as_current_span(f"tool {name[:80]}") as span:
+        outcome = await _execute(ctx, name, raw, allowed)
+        status = _status(ctx, outcome, held_before)
+        # The tool's input is the model's, sometimes the client's words: not
+        # an attribute. The audit trail below keeps it, in Postgres.
+        span.set_attributes({"tool.name": name[:80], "tool.outcome": status})
+        # An unknown tool name is the model's text: fold it so labels stay bounded.
+        TOOL_CALLS.labels(name if name in TOOLS else "unknown", status).inc()
+        if status in ("error", "rejected"):
+            span.set_status(Status(StatusCode.ERROR, status))
     detail: dict[str, Any] = {"input": raw}
     if outcome.is_error:
         detail["error"] = outcome.content[:300]
@@ -449,6 +453,17 @@ async def execute(
         detail=detail,
     )
     return outcome
+
+
+def _status(ctx: ToolContext, outcome: ToolOutcome, held_before: int) -> str:
+    if outcome.is_error:
+        rejected = outcome.content.startswith(
+            ('{"error": "Unknown tool', '{"error": "Invalid input')
+        )
+        status = "rejected" if rejected else "error"
+    else:
+        status = "held" if len(ctx.held) > held_before else "ok"
+    return status
 
 
 async def _execute(

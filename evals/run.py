@@ -81,6 +81,7 @@ class CannedClient:
         prompt_name: str,
         prompt_version: str,
         max_tokens: int = 1024,
+        context: str = "",
     ) -> AgentTurn:
         return AgentTurn(
             [TextBlock("Thanks for your message. A team member will follow up.")],
@@ -174,16 +175,19 @@ async def main_async(
         return BudgetedClient(inner, budget, allow_unpriced=args.dry_run)
 
     llm = client(model)
+    lookup_model = settings.llm_lookup_model if args.lookup_model is None else args.lookup_model
+    lookup = client(lookup_model) if lookup_model else None
     url = os.environ.get("FDA_EVAL_DATABASE_URL") or database.eval_url(settings.database_url)
     await database.prepare(url)
     engine = make_engine(url)
-    ctx = EvalContext(make_sessionmaker(engine), llm, default_embedder(), prompt_version)
+    ctx = EvalContext(make_sessionmaker(engine), llm, default_embedder(), prompt_version, lookup)
 
     started = time.perf_counter()
     report: dict[str, Any] = {
         "run": {
             "started_at": datetime.now(UTC).isoformat(timespec="seconds"),
             "model": "fake-model (dry run)" if args.dry_run else model,
+            "lookup_model": lookup_model or None,
             "prompt_version": prompt_version,
             "git_sha": git_sha(),
             "layers": layers,
@@ -195,7 +199,10 @@ async def main_async(
     stopped: str | None = None
     try:
         if "agent" in layers:
-            print(f"agent cases: {len(cases)} (model {model}, prompt agent/{prompt_version})")
+            print(
+                f"agent cases: {len(cases)} (model {model}, lookups {lookup_model or 'off'},"
+                f" prompt agent/{prompt_version})"
+            )
             results, stopped = await run_agent_layer(ctx, cases, args.concurrency)
         if "policy" in layers and not stopped:
             print("policy answers: 60 golden questions")
@@ -268,6 +275,10 @@ def main() -> None:
     p = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     p.add_argument("--dry-run", action="store_true", help="canned model, no API calls, free")
     p.add_argument("--model", help="override FDA_LLM_MODEL for the agent")
+    p.add_argument(
+        "--lookup-model",
+        help="override FDA_LLM_LOOKUP_MODEL; '' runs every step on --model (ADR 0019)",
+    )
     p.add_argument("--judge-model", default="claude-sonnet-5-5")
     p.add_argument("--sim-model", default="claude-haiku-5-5", help="plays the client")
     p.add_argument("--prompt-version", help="override FDA_AGENT_PROMPT_VERSION")

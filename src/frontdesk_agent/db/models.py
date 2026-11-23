@@ -67,6 +67,8 @@ class Tenant(Base, IdAndTimestamps):
     # The SMS number clients text. Unique across tenants: an inbound message
     # is routed to a tenant by the number it was sent to (Module 4).
     sms_number: Mapped[str | None] = mapped_column(String(20), unique=True)
+    # Model spend allowed per local day; None uses the app-wide setting.
+    daily_budget_usd: Mapped[Decimal | None] = mapped_column(Numeric(10, 2))
 
 
 class Client(Base, TenantScoped):
@@ -160,6 +162,9 @@ class LLMCall(Base, TenantScoped):
     prompt_version: Mapped[str] = mapped_column(String(20))
     input_tokens: Mapped[int] = mapped_column(Integer)
     output_tokens: Mapped[int] = mapped_column(Integer)
+    # Prompt-cache tokens (Module 7), billed apart from input_tokens.
+    cache_read_tokens: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    cache_write_tokens: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     latency_ms: Mapped[int] = mapped_column(Integer)
     cost_usd: Mapped[Decimal | None] = mapped_column(Numeric(12, 6))
     stop_reason: Mapped[str | None] = mapped_column(String(40))
@@ -260,6 +265,9 @@ class MessageStatus(enum.StrEnum):
     HANDLED = "handled"
     SENT = "sent"
     FAILED = "failed"
+    # Outbound, committed with the change it reports, not yet sent: the outbox
+    # (ADR 0020). Sent right after commit, or by the sweeper after a crash.
+    QUEUED = "queued"
 
 
 class SmsMessage(Base, TenantScoped):
@@ -276,6 +284,8 @@ class SmsMessage(Base, TenantScoped):
             postgresql_where="provider_sid IS NOT NULL",
         ),
         Index("ix_sms_messages_conversation_created", "conversation_id", "created_at"),
+        # The outbox sweeper's scan (ADR 0020).
+        Index("ix_sms_messages_queued", "created_at", postgresql_where="status = 'queued'"),
     )
 
     conversation_id: Mapped[uuid.UUID] = mapped_column(
@@ -296,6 +306,9 @@ class ReviewKind(enum.StrEnum):
     MONEY = "money"
     MEDICAL = "medical"
     ESCALATION = "escalation"  # the agent itself asked for a human
+    # Not a risk hold: the clinic's daily model budget is spent, so a fixed
+    # reply goes out at once and staff answer the rest (ADR 0019).
+    BUDGET = "budget"
 
 
 class ReviewStatus(enum.StrEnum):

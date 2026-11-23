@@ -3,10 +3,11 @@
 Run locally with:  uvicorn frontdesk_agent.main:app --reload
 """
 
-from collections.abc import AsyncIterator
+import time
+from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, Request, status
+from fastapi import FastAPI, Request, Response, status
 from fastapi.responses import JSONResponse
 
 from frontdesk_agent import __version__
@@ -15,15 +16,20 @@ from frontdesk_agent.api.auth import router as auth_router
 from frontdesk_agent.api.channels import router as channels_router
 from frontdesk_agent.api.drafts import router as drafts_router
 from frontdesk_agent.api.health import router as health_router
+from frontdesk_agent.api.observability import router as observability_router
 from frontdesk_agent.api.policy import router as policy_router
 from frontdesk_agent.api.reviews import router as reviews_router
 from frontdesk_agent.api.tenants import router as tenants_router
 from frontdesk_agent.config import get_settings
 from frontdesk_agent.db.session import make_engine, make_sessionmaker
-from frontdesk_agent.dependencies import LazyLLMClient
+from frontdesk_agent.dependencies import LazyLLMClient, get_lookup_llm_client
+from frontdesk_agent.errortracking import init_sentry
 from frontdesk_agent.llm.base import LLMConfigurationError
+from frontdesk_agent.logcontext import bound, request_id_from
 from frontdesk_agent.logsetup import configure_logging
+from frontdesk_agent.metrics import HTTP_REQUESTS, HTTP_SECONDS
 from frontdesk_agent.services import ArqQueue, build_services
+from frontdesk_agent.tracing import SpanKind, init_tracing, trace_id_hex, tracer
 
 
 def create_app(database_url: str | None = None) -> FastAPI:
@@ -43,12 +49,20 @@ def create_app(database_url: str | None = None) -> FastAPI:
             # the app. Generate one with:
             #   python -c "import secrets; print(secrets.token_urlsafe(48))"
             raise RuntimeError("FDA_JWT_SECRET is not set; refusing to start (ADR 0016).")
+        # Here, not at import: importing the app (tests, tools) must never
+        # start sending errors to Sentry.
+        init_sentry(get_settings())
+        init_tracing(get_settings())
         # Creating an engine does not connect, so the app starts even when
         # Postgres is down; /readyz reports it instead of the process crashing.
         engine = make_engine(url)
         app.state.engine = engine
         app.state.sessionmaker = make_sessionmaker(engine)
-        app.state.services = build_services(get_settings(), app.state.sessionmaker, LazyLLMClient())
+        settings = get_settings()
+        lookup = LazyLLMClient(get_lookup_llm_client) if settings.llm_lookup_model else None
+        app.state.services = build_services(
+            settings, app.state.sessionmaker, LazyLLMClient(), lookup_llm=lookup
+        )
         try:
             yield
         finally:
@@ -64,6 +78,35 @@ def create_app(database_url: str | None = None) -> FastAPI:
         lifespan=lifespan,
     )
 
+    @app.middleware("http")
+    async def request_id(
+        request: Request, call_next: Callable[[Request], Awaitable[Response]]
+    ) -> Response:
+        """Every log line for this request carries one id, echoed back to the
+        caller so a support ticket can quote it."""
+        rid = request_id_from(request.headers.get("X-Request-ID"))
+        request.state.request_id = rid
+        method = request.method
+        start = time.perf_counter()
+        with tracer.start_as_current_span(f"{method}", kind=SpanKind.SERVER) as span:
+            with bound(request_id=rid, trace_id=trace_id_hex(span)):
+                response = await call_next(request)
+            # The route template, not the path: no ids or numbers in the name.
+            route = getattr(request.scope.get("route"), "path", None) or "unmatched"
+            HTTP_REQUESTS.labels(method, route, str(response.status_code)).inc()
+            HTTP_SECONDS.labels(route).observe(time.perf_counter() - start)
+            span.update_name(f"{method} {route}")
+            span.set_attributes(
+                {
+                    "http.request.method": method,
+                    "http.route": route,
+                    "http.response.status_code": response.status_code,
+                    "request.id": rid,
+                }
+            )
+        response.headers["X-Request-ID"] = rid
+        return response
+
     @app.exception_handler(LLMConfigurationError)
     async def llm_not_configured(request: Request, exc: LLMConfigurationError) -> JSONResponse:
         # Raised while building the dependency, before any endpoint's own
@@ -74,6 +117,7 @@ def create_app(database_url: str | None = None) -> FastAPI:
         )
 
     app.include_router(health_router)
+    app.include_router(observability_router)
     app.include_router(auth_router)
     app.include_router(admin_router)
     app.include_router(drafts_router)

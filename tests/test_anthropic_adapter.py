@@ -69,7 +69,9 @@ async def test_converse_round_trip_through_the_real_sdk() -> None:
 
     body = seen["body"]
     assert seen["url"].endswith("/v1/messages")
-    assert body["system"] == "You are a front desk."
+    assert body["system"] == [
+        {"type": "text", "text": "You are a front desk.", "cache_control": {"type": "ephemeral"}}
+    ]
     assert body["tools"] == [
         {
             "name": "check_availability",
@@ -145,3 +147,38 @@ def test_messages_survive_json_storage() -> None:
     ]
     stored = json.loads(json.dumps([m.to_json() for m in original]))
     assert [Message.from_json(m) for m in stored] == original
+
+
+async def test_the_stable_system_prompt_is_cached_and_the_context_is_not() -> None:
+    """One breakpoint after the system prompt caches tools and rules; the
+    per-message context (client, time) comes after it, so it cannot break
+    the cached prefix. Cache counts in the response reach the turn."""
+    seen: dict[str, Any] = {}
+    response = {
+        **TOOL_RESPONSE,
+        "usage": {
+            "input_tokens": 40,
+            "output_tokens": 45,
+            "cache_read_input_tokens": 1800,
+            "cache_creation_input_tokens": 0,
+        },
+    }
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen["body"] = json.loads(request.content)
+        return httpx.Response(200, json=response)
+
+    turn = await client_with(handler).converse(
+        system="Rules.",
+        context="You are talking with Dana Lee.",
+        messages=[Message.user_text("hi")],
+        tools=[],
+        prompt_name="agent",
+        prompt_version="v3",
+    )
+
+    assert seen["body"]["system"] == [
+        {"type": "text", "text": "Rules.", "cache_control": {"type": "ephemeral"}},
+        {"type": "text", "text": "You are talking with Dana Lee."},
+    ]
+    assert (turn.cache_read_tokens, turn.cache_write_tokens, turn.input_tokens) == (1800, 0, 40)

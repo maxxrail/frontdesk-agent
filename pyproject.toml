@@ -1,6 +1,6 @@
 [project]
 name = "frontdesk-agent"
-version = "0.6.0"
+version = "0.7.0"
 description = "Multi-tenant LLM agent service for appointment front offices, with human review."
 readme = "README.md"
 requires-python = ">=3.12"
@@ -20,6 +20,11 @@ dependencies = [
     "arq>=0.26",
     "python-multipart>=0.0.9",
     "pyjwt>=2.10",
+    "sentry-sdk>=2.20",
+    "opentelemetry-api>=1.30",
+    "opentelemetry-sdk>=1.30",
+    "opentelemetry-exporter-otlp-proto-http>=1.30",
+    "prometheus-client>=0.21",
 ]
 
 [project.optional-dependencies]
@@ -31,6 +36,7 @@ dev = [
     "mypy>=1.10",
     "pre-commit>=3.7",
     "faker>=25",
+    "locust>=2.32",
 ]
 
 [build-system]
@@ -50,7 +56,7 @@ select = ["E", "F", "I", "UP", "B", "SIM", "ASYNC"]
 [tool.mypy]
 python_version = "3.12"
 strict = true
-files = ["src", "tests", "scripts", "migrations", "evals"]
+files = ["src", "tests", "scripts", "migrations", "evals", "loadtest"]
 mypy_path = "src"
 
 [[tool.mypy.overrides]]

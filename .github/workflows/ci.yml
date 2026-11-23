@@ -130,6 +130,12 @@ jobs:
       - name: Build image
         run: docker build -t frontdesk-agent:ci .
 
+      - name: Alert rules are valid and fire when they should
+        # docs/slo.md: each SLO alert is tested on good and bad series.
+        run: |
+          docker run --rm -v "$PWD/ops/prometheus:/etc/prometheus" -w /etc/prometheus             --entrypoint promtool prom/prometheus:v2.55.1 check config prometheus.yml
+          docker run --rm -v "$PWD/ops/prometheus:/etc/prometheus" -w /etc/prometheus             --entrypoint promtool prom/prometheus:v2.55.1 test rules alerts_test.yml
+
       - name: Image can load its prompts and embedder
         # Catches files missing from the image, which /healthz never would.
         run: |

@@ -2,6 +2,7 @@
 services:
   api:
     build: .
+    restart: unless-stopped
     ports:
       - "8000:8000"
     environment: &app-env
@@ -9,9 +10,14 @@ services:
       FDA_DATABASE_URL: postgresql+psycopg://frontdesk:frontdesk@db:5432/frontdesk
       FDA_JOB_QUEUE: redis
       FDA_REDIS_URL: redis://redis:6379/0
+      FDA_OTEL_ENDPOINT: http://jaeger:4318
+      FDA_EVAL_RESULTS_DIR: /app/evals/results
     env_file:
       - path: .env
         required: false
+    volumes:
+      # Eval results files, for the eval-score panel; read-only.
+      - ./evals/results:/app/evals/results:ro
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -21,8 +27,13 @@ services:
   # Runs agent turns, slot fills and offer expiries from the Redis queue.
   worker:
     build: .
+    # arq exits when it loses Redis; coming back once Redis does is the
+    # orchestrator's job (ECS in Module 8, this policy locally).
+    restart: unless-stopped
     command: ["arq", "frontdesk_agent.worker.WorkerSettings"]
-    environment: *app-env
+    environment:
+      <<: *app-env
+      FDA_METRICS_PORT: "9101" # Prometheus scrapes the worker here
     env_file:
       - path: .env
         required: false
@@ -68,6 +79,40 @@ services:
       interval: 5s
       timeout: 3s
       retries: 10
+
+  # Traces (Module 7): the UI is http://localhost:16686; search by the tag
+  # conversation.id=<uuid> to open every trace of one conversation.
+  # Spans are in memory only and go when the container does.
+  jaeger:
+    image: jaegertracing/all-in-one:1.62.0
+    ports:
+      - "16686:16686" # UI
+      - "4318:4318" # OTLP over HTTP, from the api and the worker
+
+  # Metrics and alerts (Module 7): http://localhost:9090, alerts at /alerts.
+  prometheus:
+    image: prom/prometheus:v2.55.1
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./ops/prometheus:/etc/prometheus:ro
+
+  # Dashboards: http://localhost:3000, the "frontdesk-agent" dashboard is
+  # provisioned from ops/grafana. Local only: anonymous viewers, and the
+  # default admin login.
+  grafana:
+    image: grafana/grafana:11.3.1
+    ports:
+      - "3000:3000"
+    environment:
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /var/lib/grafana/dashboards/frontdesk.json
+    volumes:
+      - ./ops/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./ops/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    depends_on:
+      - prometheus
 
 volumes:
   pgdata:

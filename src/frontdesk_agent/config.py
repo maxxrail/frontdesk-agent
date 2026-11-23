@@ -4,10 +4,11 @@ Never read a .env file in production; it exists for local development only.
 Secrets belong in the environment or a secret manager, never in git.
 """
 
+from decimal import Decimal
 from functools import lru_cache
 from typing import Literal
 
-from pydantic import SecretStr
+from pydantic import SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -31,10 +32,18 @@ class Settings(BaseSettings):
     # loudly rather than silently fall back to some other credential.
     anthropic_api_key: str = ""
     llm_model: str = "claude-haiku-4-5-20251001"
+    # The cheap model that runs the agent's lookup-only steps; every reply and
+    # action stays on llm_model (ADR 0019). Empty: llm_model does everything.
+    llm_lookup_model: str = "claude-haiku-5-5"
     llm_timeout_s: float = 20.0
+    # "fake" answers every agent turn with one lookup and a canned reply after
+    # a realistic delay, at no cost: for load tests (loadtest/). Refused in
+    # production, where it would answer clients with nonsense.
+    llm_provider: Literal["anthropic", "fake"] = "anthropic"
+    llm_fake_latency_s: float = 0.9
     # The agent prompt version (prompts/agent/<version>.md). Changing it, like
     # changing llm_model, runs the eval suite in CI (Module 5).
-    agent_prompt_version: str = "v2"
+    agent_prompt_version: str = "v3"
 
     # Retrieval, chosen from measurements (ADR 0008). Vector search beat hybrid
     # on the golden set with the current embedder; hybrid stays one setting away.
@@ -70,11 +79,31 @@ class Settings(BaseSettings):
     rate_phone_window_s: int = 600
     rate_tenant_model_calls: int = 1000
     rate_tenant_window_s: int = 3600
+    # Daily model spend per clinic (USD, local day) before replies degrade to
+    # a fixed text and staff take over (ADR 0019). A tenant row can override it.
+    tenant_daily_budget_usd: Decimal = Decimal("5.00")
+
+    # Error reporting (Module 7). Empty: nothing is sent. Events are redacted
+    # before sending (errortracking.py). SecretStr keeps it out of reprs.
+    sentry_dsn: SecretStr = SecretStr("")
+    # OTLP/HTTP collector for traces, e.g. http://localhost:4318 (Jaeger in
+    # docker compose). Empty: spans are made but not exported.
+    otel_endpoint: str = ""
+    # The worker serves /metrics on this port (0: off). The API serves its own.
+    metrics_port: int = 0
+    # Where eval results files are read for the eval-score metric.
+    eval_results_dir: str = "evals/results"
 
     # Background jobs: "redis" for the arq worker, "inline" to run them inside
     # the API process (local development without Redis).
     job_queue: Literal["redis", "inline"] = "inline"
     redis_url: str = "redis://localhost:6379/0"
+
+    @model_validator(mode="after")
+    def _no_fake_model_in_production(self) -> "Settings":
+        if self.env == "production" and self.llm_provider == "fake":
+            raise ValueError("FDA_LLM_PROVIDER=fake is for load tests, never production")
+        return self
 
 
 @lru_cache

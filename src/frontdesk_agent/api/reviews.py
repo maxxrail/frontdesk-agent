@@ -115,7 +115,7 @@ async def _decide(
         raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
     except ReviewNeedsReplyError as exc:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(exc)) from exc
-    await session.commit()
+    await effects.commit(session)
     out = ReviewOut.model_validate(item)
     await effects.flush(session, services.sender, services.queue)
     return out

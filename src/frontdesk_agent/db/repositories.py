@@ -34,6 +34,7 @@ from frontdesk_agent.db.models import (
     Provider,
     ProviderSchedule,
     ReviewItem,
+    ReviewKind,
     ReviewStatus,
     Role,
     SlotOffer,
@@ -93,6 +94,10 @@ class TenantDirectory:
         if tenant is None:
             raise NotFoundError("tenant not found")
         return tenant
+
+    async def ids(self) -> list[uuid.UUID]:
+        """Every tenant id: for sweeps that then use tenant-bound repositories."""
+        return list((await self._session.execute(select(Tenant.id))).scalars())
 
     async def by_slug(self, slug: str) -> Tenant | None:
         result = await self._session.execute(select(Tenant).where(Tenant.slug == slug))
@@ -341,6 +346,8 @@ class LLMCallRepository(TenantRepository[LLMCall]):
                 prompt_version=completion.prompt_version,
                 input_tokens=completion.input_tokens,
                 output_tokens=completion.output_tokens,
+                cache_read_tokens=completion.cache_read_tokens,
+                cache_write_tokens=completion.cache_write_tokens,
                 latency_ms=completion.latency_ms,
                 stop_reason=completion.stop_reason,
                 cost_usd=cost_usd,
@@ -351,6 +358,18 @@ class LLMCallRepository(TenantRepository[LLMCall]):
     async def recent(self, *, limit: int = 50) -> list[LLMCall]:
         stmt = self._scoped().order_by(LLMCall.created_at.desc(), LLMCall.id).limit(limit)
         return list((await self._session.execute(stmt)).scalars())
+
+    async def spent_today(self, timezone: str) -> Decimal:
+        """Model spend since local midnight in ``timezone``, in database time
+        like the rate limits, so a skewed app clock cannot reset the budget."""
+        midnight = func.timezone(
+            timezone, func.date_trunc("day", func.timezone(timezone, func.now()))
+        )
+        stmt = select(func.coalesce(func.sum(LLMCall.cost_usd), 0)).where(
+            LLMCall.tenant_id == self._tenant_id, LLMCall.created_at >= midnight
+        )
+        spent = (await self._session.execute(stmt)).scalar_one()
+        return Decimal(spent or 0)
 
     async def count_since(self, seconds: float) -> int:
         """Model calls in the last ``seconds`` of database time, for rate limits."""
@@ -418,6 +437,33 @@ class SmsMessageRepository(TenantRepository[SmsMessage]):
         )
         new_id = (await self._session.execute(stmt)).scalar()
         return None if new_id is None else await self.get(new_id)
+
+    async def lock_queued(self, message_id: uuid.UUID) -> SmsMessage | None:
+        """The outbox row, locked, if it is still queued; None if another
+        sender holds it or has sent it. Locked rows are skipped, not waited
+        for, so the post-commit send and the sweeper never send one twice."""
+        stmt = (
+            self._scoped()
+            .where(SmsMessage.id == message_id, SmsMessage.status == MessageStatus.QUEUED)
+            .with_for_update(skip_locked=True)
+        )
+        return (await self._session.execute(stmt)).scalar_one_or_none()
+
+    async def queued_before(self, seconds: float, *, limit: int = 100) -> list[uuid.UUID]:
+        """Outbox rows older than ``seconds`` of database time: left behind by
+        a process that died between commit and send."""
+        since = func.now() - func.make_interval(0, 0, 0, 0, 0, 0, seconds)
+        stmt = (
+            select(SmsMessage.id)
+            .where(
+                SmsMessage.tenant_id == self._tenant_id,
+                SmsMessage.status == MessageStatus.QUEUED,
+                SmsMessage.created_at < since,
+            )
+            .order_by(SmsMessage.created_at)
+            .limit(limit)
+        )
+        return list((await self._session.execute(stmt)).scalars())
 
     async def inbound_count_since(self, conversation_id: uuid.UUID, seconds: float) -> int:
         """Inbound texts in the last ``seconds`` of database time, counting only
@@ -618,3 +664,26 @@ class ApiKeyRepository(TenantRepository[ApiKey]):
             key.revoked_at = now
             await self._session.flush()
         return key
+
+
+class OperationsCounts:
+    """Counts across every tenant, for /metrics only.
+
+    Not tenant-bound, like the two directories above, because an operator's
+    dashboard is about the whole system. It returns numbers, never rows, so
+    nothing a tenant owns can leave through it.
+    """
+
+    def __init__(self, session: AsyncSession) -> None:
+        self._session = session
+
+    async def pending_reviews_by_kind(self) -> dict[str, int]:
+        stmt = (
+            select(ReviewItem.kind, func.count())
+            .where(ReviewItem.status == ReviewStatus.PENDING)
+            .group_by(ReviewItem.kind)
+        )
+        counts = {k.value: 0 for k in ReviewKind}
+        for kind, n in (await self._session.execute(stmt)).all():
+            counts[kind.value] = int(n)
+        return counts

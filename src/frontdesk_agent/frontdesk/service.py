@@ -28,6 +28,7 @@ import logging
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime
+from decimal import Decimal
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -69,7 +70,9 @@ from frontdesk_agent.guardrails import (
 )
 from frontdesk_agent.llm.base import LLMClient
 from frontdesk_agent.llm.messages import Message, TextBlock
+from frontdesk_agent.logcontext import bind
 from frontdesk_agent.retrieval.embeddings import Embedder
+from frontdesk_agent.tracing import set_conversation
 
 logger = logging.getLogger(__name__)
 
@@ -83,6 +86,9 @@ Outcome = str  # short label for logs and tests: "agent_reply", "held_for_review
 
 # How long a message waits when its tenant is over the model-call limit.
 TENANT_LIMIT_RETRY_S = 60
+# Sent when the clinic's daily model budget is spent. The medical holding text,
+# because the message it answers is unread and could be an emergency.
+BUDGET_HOLDING_MESSAGE = MEDICAL_HOLDING_MESSAGE
 
 
 @dataclass(frozen=True, slots=True)
@@ -93,6 +99,9 @@ class RateLimits:
     phone_window_s: int = 600
     tenant_model_calls: int = 1000
     tenant_window_s: int = 3600
+    # Model spend per clinic per local day before the canned reply takes over;
+    # a tenant's daily_budget_usd overrides it (ADR 0019).
+    tenant_daily_budget_usd: Decimal = Decimal("5.00")
 
 
 @dataclass
@@ -104,6 +113,8 @@ class FrontDesk:
     # Which prompts/agent/<version>.md to run: a setting, so evals can compare versions.
     prompt_version: str = PROMPT_VERSION
     limits: RateLimits = field(default_factory=RateLimits)
+    # Runs the agent's lookup-only steps (ADR 0019); None: llm does all of it.
+    lookup_llm: LLMClient | None = None
 
     # -- inbound -----------------------------------------------------------
 
@@ -116,6 +127,8 @@ class FrontDesk:
         convo = await ConversationRepository(session, tenant.id).for_client(
             (await self._conversation_client(session, tenant, msg)).id
         )
+        bind(conversation_id=str(convo.id))
+        set_conversation(str(convo.id))
         await session.refresh(msg)  # re-read under the conversation lock
         if msg.status != MessageStatus.RECEIVED:
             return "already_handled"
@@ -170,6 +183,21 @@ class FrontDesk:
             )
             return "rate_limited:tenant"
 
+        budget = tenant.daily_budget_usd
+        if budget is None:
+            budget = lim.tenant_daily_budget_usd
+        spent = await LLMCallRepository(session, tenant.id).spent_today(tenant.timezone)
+        if spent >= budget:
+            # Degrade, don't go silent: a fixed reply now, a person for the
+            # rest. The hold pauses the conversation, so later texts wait for
+            # staff instead of each making a review item.
+            reason = f"Daily model budget of ${budget} is spent (${spent:.2f} today)."
+            logger.warning("tenant over daily model budget", extra={"spent_usd": str(spent)})
+            self._hold(session, convo, msg, HeldAction(ReviewKind.BUDGET, reason), None)
+            self._text(effects, tenant, convo, client, BUDGET_HOLDING_MESSAGE)
+            await _audit_guardrail(session, convo, msg, "daily_budget", reason)
+            return "held_for_review:budget"
+
         if inbound_too_long(msg.body):
             reason = (
                 f"Message is {len(msg.body)} characters, over the {MAX_INBOUND_CHARS} limit;"
@@ -191,7 +219,12 @@ class FrontDesk:
         flag = classify(body)
         if flag is not None:
             run = await run_agent(
-                self.llm, ctx, history, read_only=True, prompt_version=self.prompt_version
+                self.llm,
+                ctx,
+                history,
+                read_only=True,
+                prompt_version=self.prompt_version,
+                lookup_llm=self.lookup_llm,
             )
             self._save(convo, history, run)
             held = HeldAction(flag.kind, flag.reason)
@@ -201,7 +234,9 @@ class FrontDesk:
                 self._text(effects, tenant, convo, client, MEDICAL_HOLDING_MESSAGE)
             return f"held_for_review:{flag.kind.value}"
 
-        run = await run_agent(self.llm, ctx, history, prompt_version=self.prompt_version)
+        run = await run_agent(
+            self.llm, ctx, history, prompt_version=self.prompt_version, lookup_llm=self.lookup_llm
+        )
         self._save(convo, history, run)
         for appt in ctx.cancelled:
             self._queue_slot_fill(effects, tenant, appt, client)
@@ -265,6 +300,8 @@ class FrontDesk:
         if item.status != ReviewStatus.PENDING:
             raise ReviewAlreadyDecidedError(f"review item is already {item.status.value}")
         convo = await ConversationRepository(session, tenant.id).get(item.conversation_id)
+        bind(conversation_id=str(convo.id))
+        set_conversation(str(convo.id))
         client = await ClientRepository(session, tenant.id).get(convo.client_id)
 
         text = (reply if reply is not None else item.proposed_reply if approve else "").strip()

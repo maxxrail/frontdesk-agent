@@ -8,7 +8,7 @@ from a waitlist, and routes anything risky to a human for approval.
 Every model call is logged with tokens, cost and latency. Every prompt change is
 gated by an eval suite in CI.
 
-**Status:** Module 6 of 9 complete. Clients text the clinic; an agent answers
+**Status:** Module 7 of 9 complete. Clients text the clinic; an agent answers
 policy questions from the clinic's own documents, finds open slots, books and
 cancels, and hands anything risky to a person: late cancellations, money,
 and medical questions wait in a review queue and send nothing until approved.
@@ -17,7 +17,12 @@ by a bandit that learns who answers fastest. Staff sign in with per-tenant
 API keys or logins; guardrails clean what reaches the model and check every
 reply before it is sent; logs never hold a phone number or name. The
 [threat model](docs/threat-model.md) walks the OWASP Top 10 for LLM
-applications and lists the risks accepted.
+applications and lists the risks accepted. Each text is one trace, from the
+webhook to every model and tool call, with its latency and cost; metrics,
+three SLOs with alerts, and a Grafana dashboard show the whole service
+([observability](docs/observability.md)). The cheap model does the lookups,
+the prompt cache holds the rules, and a clinic over its daily budget gets a
+fixed reply and a person.
 
 | Measured | |
 | --- | --- |
@@ -25,12 +30,32 @@ applications and lists the risks accepted.
 | Agent step limit | 6 model calls, tested with a model that never stops |
 | Forged webhooks rejected | 4 of 4 forgery kinds, 403 |
 | Waitlist bandit vs first-come-first-served (simulated) | 0.654 vs 0.192 mean reward |
-| Eval suite, real model (PR #14) | 113 of 134 cases, red team 38 of 42, $1.45 a run |
+| Eval suite, real model (PR #23) | 119 of 137 cases, red team 41 of 45, $1.41 a run |
 | Instructions planted in a policy document | 2 of 2 ignored by the model; cancellations held regardless |
-| Guarantees broken on purpose to prove a test fails | 21 in Module 6 |
-| Tests | 449 |
+| 50 concurrent conversations (fake model) | reply p95 3.22 s; 0 of 303 webhooks failed |
+| Redis killed for 60 s under that load | 0 of 398 webhooks failed, every text answered, alert fired within 60 s |
+| Guarantees broken on purpose to prove a test fails | 29 in Module 7 |
+| Tests | 491 |
 
 How these were chosen, including why hybrid search lost: [ADR 0008](docs/adr/0008-retrieval-chosen-from-measurements.md).
+
+### Cost per conversation, before and after routing and caching
+
+Same code and prompt (`agent/v3`), full eval suite (137 cases, about 1.3
+texts each), Haiku 4.5 writing every reply. "After" adds Haiku 5.5 for
+lookup steps, with prompt caching ([ADR 0019](docs/adr/0019-cost-controls-routing-caching-budget.md)).
+
+| | Before | After |
+| --- | --- | --- |
+| Agent cost per conversation | $0.0053 | **$0.0044** (-17%) |
+| Model calls per text | 1.5 | 2.6 |
+| Model time per text, p50 / p95 | 1.46 s / 2.55 s | 2.14 s / 3.35 s |
+| Input tokens read from the prompt cache | 0 | 496K (44% of input) |
+| Eval pass rate / risk cases | 76.6% / 17 of 18 | 86.9% / 15 of 18 |
+
+Prompt caching on Haiku 4.5 alone would save nothing: it caches only
+prompts of 4,096 tokens or more, and an agent call averages 2,166. The two
+risk cases lost were drafts for staff, not texts to clients (issue #24).
 
 All data in this repo is synthetic. No real patient or customer data is used.
 
@@ -233,7 +258,7 @@ docs/adr/            architecture decision records
 | 4 | Agent with tools, SMS channel, review queue ✅ | v0.4 |
 | 5 | Eval suite gating pull requests ✅ | v0.5 |
 | 6 | Guardrails, auth, redaction, threat model ✅ | v0.6 |
-| 7 | Tracing, metrics, cost and latency dashboards | v0.7 |
+| 7 | Tracing, metrics, cost and latency dashboards ✅ | v0.7 |
 | 8 | AWS deploy with Terraform and continuous delivery | v1.0 |
 | 9 | TypeScript review dashboard and write-up | v1.1 |
 

@@ -24,6 +24,9 @@ on:
       prompt_version:
         description: "Agent prompt version (blank: the configured default)"
         required: false
+      lookup_model:
+        description: "Model for lookup-only steps (blank: the default; 'off': none, ADR 0019)"
+        required: false
       layers:
         description: "Layers to run"
         default: "agent,policy,judge,sim"
@@ -42,6 +45,9 @@ permissions:
 jobs:
   evals:
     name: Eval suite (real model)
+    # Dependabot PRs get no repository secrets, so the run could only fail on
+    # the missing API key. A skipped job still satisfies a required check.
+    if: github.event.pull_request.user.login != 'dependabot[bot]'
     runs-on: ubuntu-latest
     timeout-minutes: 45
     services:
@@ -88,6 +94,7 @@ jobs:
         env:
           MODEL: ${{ inputs.model }}
           PROMPT_VERSION: ${{ inputs.prompt_version }}
+          LOOKUP_MODEL: ${{ inputs.lookup_model }}
           LAYERS: ${{ inputs.layers || 'agent,policy,judge,sim' }}
           BUDGET: ${{ inputs.budget || '3.00' }}
         run: |
@@ -95,6 +102,8 @@ jobs:
                 --layers "$LAYERS" --budget "$BUDGET")
           [ -n "$MODEL" ] && args+=(--model "$MODEL")
           [ -n "$PROMPT_VERSION" ] && args+=(--prompt-version "$PROMPT_VERSION")
+          [ "$LOOKUP_MODEL" = "off" ] && args+=(--lookup-model "")
+          [ -n "$LOOKUP_MODEL" ] && [ "$LOOKUP_MODEL" != "off" ] && args+=(--lookup-model "$LOOKUP_MODEL")
           set +e
           uv run python evals/run.py "${args[@]}"
           echo "exit=$?" >> "$GITHUB_OUTPUT"

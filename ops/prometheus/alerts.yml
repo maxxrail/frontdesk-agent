@@ -1,0 +1,51 @@
+# One alert per SLO (docs/slo.md), plus the two that say the system itself
+# is unhealthy. Prometheus shows firing alerts at localhost:9090/alerts;
+# sending them anywhere (email, Slack) is Module 8.
+groups:
+  - name: slo
+    rules:
+      - alert: SmsReplyLatencySLO
+        # SLO 1: 95% of inbound SMS are handled within 8 seconds.
+        expr: |
+          histogram_quantile(0.95, sum by (le) (rate(frontdesk_sms_turn_seconds_bucket[5m]))) > 8
+        for: 5m
+        labels: {severity: page, slo: sms-latency}
+        annotations:
+          summary: "p95 SMS handling time is {{ $value | humanizeDuration }} (SLO: 8s)"
+
+      - alert: WebhookAvailabilitySLO
+        # SLO 2: 99.5% of Twilio webhook requests succeed (no 5xx).
+        expr: |
+          sum(rate(frontdesk_http_requests_total{route="/v1/channels/sms",status=~"5.."}[5m]))
+            / sum(rate(frontdesk_http_requests_total{route="/v1/channels/sms"}[5m])) > 0.005
+        for: 5m
+        labels: {severity: page, slo: webhook-availability}
+        annotations:
+          summary: "{{ $value | humanizePercentage }} of webhook requests failed (SLO: 0.5%)"
+
+      - alert: ModelCallErrorSLO
+        # SLO 3: 98% of model calls succeed (after the client's retries).
+        expr: |
+          sum(rate(frontdesk_llm_calls_total{outcome="error"}[10m]))
+            / sum(rate(frontdesk_llm_calls_total[10m])) > 0.02
+        for: 10m
+        labels: {severity: ticket, slo: model-errors}
+        annotations:
+          summary: "{{ $value | humanizePercentage }} of model calls failed (SLO: 2%)"
+
+  - name: health
+    rules:
+      - alert: DependencyDown
+        # Redis or Postgres stopped answering the api's /metrics probe.
+        expr: frontdesk_dependency_up == 0
+        for: 30s
+        labels: {severity: page}
+        annotations:
+          summary: "{{ $labels.dependency }} is not answering"
+
+      - alert: TargetDown
+        expr: up == 0
+        for: 1m
+        labels: {severity: page}
+        annotations:
+          summary: "Prometheus cannot scrape {{ $labels.job }}"

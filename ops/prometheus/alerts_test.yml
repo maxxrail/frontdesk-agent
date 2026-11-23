@@ -1,0 +1,87 @@
+# promtool test rules ops/prometheus/alerts_test.yml (run in CI).
+# Each alert fires on a bad series and stays quiet on a good one.
+rule_files:
+  - alerts.yml
+evaluation_interval: 10s
+
+tests:
+  - name: Redis stops answering
+    interval: 10s
+    input_series:
+      - series: 'frontdesk_dependency_up{dependency="redis"}'
+        values: "1 1 1 0 0 0 0 0 0"
+      - series: 'frontdesk_dependency_up{dependency="postgres"}'
+        values: "1 1 1 1 1 1 1 1 1"
+    alert_rule_test:
+      - eval_time: 40s
+        alertname: DependencyDown # down for 10s: not yet
+        exp_alerts: []
+      - eval_time: 80s
+        alertname: DependencyDown
+        exp_alerts:
+          - exp_labels: {severity: page, dependency: redis}
+            exp_annotations: {summary: "redis is not answering"}
+
+  - name: Slow SMS turns breach the latency SLO; fast ones do not
+    interval: 1m
+    input_series:
+      # 60 turns a minute, all in the 12s bucket: p95 is well over 8s.
+      - series: 'frontdesk_sms_turn_seconds_bucket{le="8"}'
+        values: "0+0x20"
+      - series: 'frontdesk_sms_turn_seconds_bucket{le="12"}'
+        values: "0+60x20"
+      - series: 'frontdesk_sms_turn_seconds_bucket{le="+Inf"}'
+        values: "0+60x20"
+    alert_rule_test:
+      - eval_time: 3m
+        alertname: SmsReplyLatencySLO # breached, but not for 5m yet
+        exp_alerts: []
+      - eval_time: 12m
+        alertname: SmsReplyLatencySLO
+        exp_alerts:
+          - exp_labels: {severity: page, slo: sms-latency}
+            exp_annotations: {summary: "p95 SMS handling time is 11.8s (SLO: 8s)"}
+
+  - name: Fast SMS turns are fine
+    interval: 1m
+    input_series:
+      - series: 'frontdesk_sms_turn_seconds_bucket{le="3"}'
+        values: "0+60x20"
+      - series: 'frontdesk_sms_turn_seconds_bucket{le="8"}'
+        values: "0+60x20"
+      - series: 'frontdesk_sms_turn_seconds_bucket{le="+Inf"}'
+        values: "0+60x20"
+    alert_rule_test:
+      - eval_time: 15m
+        alertname: SmsReplyLatencySLO
+        exp_alerts: []
+
+  - name: Webhook 5xx over 0.5% breaches availability
+    interval: 1m
+    input_series:
+      - series: 'frontdesk_http_requests_total{method="POST",route="/v1/channels/sms",status="200"}'
+        values: "0+99x20"
+      - series: 'frontdesk_http_requests_total{method="POST",route="/v1/channels/sms",status="500"}'
+        values: "0+1x20" # 1%
+      - series: 'frontdesk_http_requests_total{method="GET",route="/healthz",status="500"}'
+        values: "0+1000x20" # other routes do not count
+    alert_rule_test:
+      - eval_time: 12m
+        alertname: WebhookAvailabilitySLO
+        exp_alerts:
+          - exp_labels: {severity: page, slo: webhook-availability}
+            exp_annotations: {summary: "1% of webhook requests failed (SLO: 0.5%)"}
+
+  - name: Model errors over 2% breach the model SLO
+    interval: 1m
+    input_series:
+      - series: 'frontdesk_llm_calls_total{model="m",prompt="agent/v2",outcome="ok"}'
+        values: "0+95x30"
+      - series: 'frontdesk_llm_calls_total{model="unknown",prompt="agent/v2",outcome="error"}'
+        values: "0+5x30" # 5%
+    alert_rule_test:
+      - eval_time: 25m
+        alertname: ModelCallErrorSLO
+        exp_alerts:
+          - exp_labels: {severity: ticket, slo: model-errors}
+            exp_annotations: {summary: "5% of model calls failed (SLO: 2%)"}
