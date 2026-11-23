@@ -14,7 +14,7 @@ from prometheus_client import start_http_server
 
 from frontdesk_agent.config import get_settings
 from frontdesk_agent.db.session import make_engine, make_sessionmaker
-from frontdesk_agent.dependencies import get_llm_client
+from frontdesk_agent.dependencies import get_llm_client, get_lookup_llm_client
 from frontdesk_agent.errortracking import init_sentry
 from frontdesk_agent.logsetup import configure_logging
 from frontdesk_agent.services import Services, build_services, run_job
@@ -33,7 +33,9 @@ async def startup(ctx: dict[str, Any]) -> None:
         start_http_server(settings.metrics_port)
     engine = make_engine(settings.database_url)
     ctx["engine"] = engine
-    ctx["services"] = build_services(settings, make_sessionmaker(engine), get_llm_client())
+    ctx["services"] = build_services(
+        settings, make_sessionmaker(engine), get_llm_client(), lookup_llm=get_lookup_llm_client()
+    )
 
 
 async def shutdown(ctx: dict[str, Any]) -> None:

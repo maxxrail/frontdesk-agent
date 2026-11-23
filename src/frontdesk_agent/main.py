@@ -22,7 +22,7 @@ from frontdesk_agent.api.reviews import router as reviews_router
 from frontdesk_agent.api.tenants import router as tenants_router
 from frontdesk_agent.config import get_settings
 from frontdesk_agent.db.session import make_engine, make_sessionmaker
-from frontdesk_agent.dependencies import LazyLLMClient
+from frontdesk_agent.dependencies import LazyLLMClient, get_lookup_llm_client
 from frontdesk_agent.errortracking import init_sentry
 from frontdesk_agent.llm.base import LLMConfigurationError
 from frontdesk_agent.logcontext import bound, request_id_from
@@ -58,7 +58,11 @@ def create_app(database_url: str | None = None) -> FastAPI:
         engine = make_engine(url)
         app.state.engine = engine
         app.state.sessionmaker = make_sessionmaker(engine)
-        app.state.services = build_services(get_settings(), app.state.sessionmaker, LazyLLMClient())
+        settings = get_settings()
+        lookup = LazyLLMClient(get_lookup_llm_client) if settings.llm_lookup_model else None
+        app.state.services = build_services(
+            settings, app.state.sessionmaker, LazyLLMClient(), lookup_llm=lookup
+        )
         try:
             yield
         finally:

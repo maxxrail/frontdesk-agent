@@ -31,6 +31,9 @@ class Settings(BaseSettings):
     # loudly rather than silently fall back to some other credential.
     anthropic_api_key: str = ""
     llm_model: str = "claude-haiku-4-5-20251001"
+    # The cheap model that runs the agent's lookup-only steps; every reply and
+    # action stays on llm_model (ADR 0019). Empty: llm_model does everything.
+    llm_lookup_model: str = "claude-haiku-5-5"
     llm_timeout_s: float = 20.0
     # The agent prompt version (prompts/agent/<version>.md). Changing it, like
     # changing llm_model, runs the eval suite in CI (Module 5).

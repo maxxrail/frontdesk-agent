@@ -49,6 +49,11 @@ TURN_COST = Histogram(
     "Model spend for one agent turn (one inbound SMS).",
     buckets=(0.0005, 0.001, 0.002, 0.004, 0.008, 0.016, 0.032, 0.064),
 )
+AGENT_ROUTES = Counter(
+    "frontdesk_agent_routes_total",
+    "Agent steps drafted by the lookup model: run as is, or handed to the main model.",
+    ["route"],
+)
 TOOL_CALLS = Counter("frontdesk_tool_calls_total", "Agent tool calls.", ["tool", "outcome"])
 REVIEW_QUEUE = Gauge("frontdesk_review_queue_depth", "Pending review items.", ["kind"])
 DEPENDENCY_UP = Gauge(

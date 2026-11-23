@@ -8,6 +8,13 @@ tested with a scripted fake that never stops (ADR 0010).
 
 Everything provider-specific lives behind LLMClient; everything with side
 effects lives in tools; this file only sequences them and keeps the record.
+
+Model routing (ADR 0019): with a ``lookup_llm``, a cheap model drafts each
+step first. A draft that only looks things up (read-only tools) runs as is.
+Anything else, a reply or an action, is thrown away and the main model takes
+that step and the rest of the turn, so every decision and every text the
+client reads still comes from the main model. The thrown-away draft is
+recorded and costed like any other call.
 """
 
 import logging
@@ -28,7 +35,7 @@ from frontdesk_agent.llm.messages import (
 )
 from frontdesk_agent.llm.pricing import cost_of
 from frontdesk_agent.llm.retry import RetryPolicy, with_retries
-from frontdesk_agent.metrics import TURN_COST
+from frontdesk_agent.metrics import AGENT_ROUTES, TURN_COST
 from frontdesk_agent.prompts import load_prompt
 from frontdesk_agent.timefmt import human_datetime
 from frontdesk_agent.tracing import tracer
@@ -88,11 +95,13 @@ async def run_agent(
     max_steps: int = MAX_STEPS,
     retry_policy: RetryPolicy | None = None,
     prompt_version: str = PROMPT_VERSION,
+    lookup_llm: LLMClient | None = None,
 ) -> AgentRun:
     """Run the loop on ``history`` (which must end with the client's message).
 
     With ``read_only`` the agent can look things up but not book, cancel or
-    save: used to draft a reply for a human to review.
+    save: used to draft a reply for a human to review. With ``lookup_llm``,
+    that model runs the lookup-only steps (see the module docstring).
     """
     with tracer.start_as_current_span("agent.turn") as span:
         span.set_attributes(
@@ -102,7 +111,9 @@ async def run_agent(
                 "llm.prompt": f"{PROMPT_NAME}/{prompt_version}",
             }
         )
-        run = await _run(llm, ctx, history, read_only, max_steps, retry_policy, prompt_version)
+        run = await _run(
+            llm, ctx, history, read_only, max_steps, retry_policy, prompt_version, lookup_llm
+        )
         span.set_attributes(
             {
                 "agent.steps": run.steps,
@@ -123,6 +134,7 @@ async def _run(
     max_steps: int,
     retry_policy: RetryPolicy | None,
     prompt_version: str,
+    lookup_llm: LLMClient | None,
 ) -> AgentRun:
     # Fixed here, before the model reads anything: no text it reads later
     # (the client's, a document's, a tool result's) can widen it.
@@ -135,11 +147,9 @@ async def _run(
     run = AgentRun(reply=None, stopped="step_limit", steps=0)
     policy = retry_policy or RetryPolicy()
 
-    for step in range(1, max_steps + 1):
-        run.steps = step
-
+    async def step_with(model: LLMClient) -> AgentTurn:
         async def call() -> AgentTurn:
-            return await llm.converse(
+            return await model.converse(
                 system=system,
                 context=context,
                 messages=messages,
@@ -155,6 +165,22 @@ async def _run(
         await LLMCallRepository(ctx.session, ctx.tenant.id).record(
             _as_completion(turn), cost_usd=cost
         )
+        return turn
+
+    drafter = lookup_llm
+    for step in range(1, max_steps + 1):
+        run.steps = step
+        if drafter is not None:
+            draft = await step_with(drafter)
+            if _lookup_only(draft):
+                AGENT_ROUTES.labels("lookup").inc()
+                turn = draft
+            else:
+                AGENT_ROUTES.labels("handoff").inc()
+                drafter = None  # the main model keeps the rest of this turn
+                turn = await step_with(llm)
+        else:
+            turn = await step_with(llm)
         messages.append(turn.as_message())
         run.new_messages.append(turn.as_message())
 
@@ -173,6 +199,13 @@ async def _run(
 
     logger.warning("agent hit the step limit", extra={"steps": max_steps})
     return run
+
+
+def _lookup_only(turn: AgentTurn) -> bool:
+    """Only read-only tool calls: nothing is booked, cancelled, saved or
+    escalated, and nothing is said to the client."""
+    calls = turn.tool_calls
+    return bool(calls) and all(c.name in TOOLS and TOOLS[c.name].read_only for c in calls)
 
 
 def _read_documents(history: list[Message]) -> bool:

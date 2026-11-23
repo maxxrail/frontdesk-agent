@@ -148,6 +148,8 @@ def build_services(
     sessionmaker: async_sessionmaker[AsyncSession],
     llm: LLMClient,
     embedder: Embedder | None = None,
+    *,
+    lookup_llm: LLMClient | None = None,
 ) -> Services:
     from frontdesk_agent.channels.twilio import ConsoleSender, TwilioSender
 
@@ -161,6 +163,7 @@ def build_services(
     )
     frontdesk = FrontDesk(
         llm=llm,
+        lookup_llm=lookup_llm,
         embedder=embedder or default_embedder(),
         clock=SystemClock(),
         slot_filler=SlotFiller(EpsilonGreedy(epsilon=0.1, rng=random.Random())),

@@ -106,6 +106,8 @@ class FrontDesk:
     # Which prompts/agent/<version>.md to run: a setting, so evals can compare versions.
     prompt_version: str = PROMPT_VERSION
     limits: RateLimits = field(default_factory=RateLimits)
+    # Runs the agent's lookup-only steps (ADR 0019); None: llm does all of it.
+    lookup_llm: LLMClient | None = None
 
     # -- inbound -----------------------------------------------------------
 
@@ -195,7 +197,12 @@ class FrontDesk:
         flag = classify(body)
         if flag is not None:
             run = await run_agent(
-                self.llm, ctx, history, read_only=True, prompt_version=self.prompt_version
+                self.llm,
+                ctx,
+                history,
+                read_only=True,
+                prompt_version=self.prompt_version,
+                lookup_llm=self.lookup_llm,
             )
             self._save(convo, history, run)
             held = HeldAction(flag.kind, flag.reason)
@@ -205,7 +212,9 @@ class FrontDesk:
                 self._text(effects, tenant, convo, client, MEDICAL_HOLDING_MESSAGE)
             return f"held_for_review:{flag.kind.value}"
 
-        run = await run_agent(self.llm, ctx, history, prompt_version=self.prompt_version)
+        run = await run_agent(
+            self.llm, ctx, history, prompt_version=self.prompt_version, lookup_llm=self.lookup_llm
+        )
         self._save(convo, history, run)
         for appt in ctx.cancelled:
             self._queue_slot_fill(effects, tenant, appt, client)

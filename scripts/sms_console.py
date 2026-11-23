@@ -24,7 +24,7 @@ from frontdesk_agent.config import get_settings
 from frontdesk_agent.db.models import ReviewStatus
 from frontdesk_agent.db.repositories import ReviewRepository, TenantDirectory
 from frontdesk_agent.db.session import make_engine, make_sessionmaker
-from frontdesk_agent.dependencies import get_llm_client
+from frontdesk_agent.dependencies import get_llm_client, get_lookup_llm_client
 from frontdesk_agent.frontdesk.ports import Effects
 from frontdesk_agent.frontdesk.service import accept_inbound
 from frontdesk_agent.services import InlineQueue, Services, build_services, run_job
@@ -34,7 +34,9 @@ async def main(clinic: str, phone: str) -> None:
     settings = get_settings().model_copy(update={"sms_sender": "console", "job_queue": "inline"})
     engine = make_engine(settings.database_url)
     sessionmaker = make_sessionmaker(engine)
-    services: Services = build_services(settings, sessionmaker, get_llm_client())
+    services: Services = build_services(
+        settings, sessionmaker, get_llm_client(), lookup_llm=get_lookup_llm_client()
+    )
     async with sessionmaker() as session:
         tenant = await TenantDirectory(session).by_slug(clinic)
         if tenant is None or not tenant.sms_number:

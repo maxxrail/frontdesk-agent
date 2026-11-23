@@ -151,6 +151,7 @@ class EvalContext:
     llm: LLMClient
     embedder: Embedder
     prompt_version: str = PROMPT_VERSION
+    lookup_llm: LLMClient | None = None
 
 
 # Given the turns so far, the client's next text, or None to stop.
@@ -177,6 +178,7 @@ async def run_case(
     clock, sender, queue = _Clock(), _Sender(), _Queue()
     frontdesk = FrontDesk(
         llm=ctx.llm,
+        lookup_llm=ctx.lookup_llm,
         embedder=ctx.embedder,
         clock=clock,
         slot_filler=SlotFiller(EpsilonGreedy(0.0, rng=random.Random(0))),
