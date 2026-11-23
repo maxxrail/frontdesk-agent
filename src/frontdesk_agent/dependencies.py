@@ -32,13 +32,18 @@ def get_lookup_llm_client() -> LLMClient | None:
 
 def _client(model: str) -> LLMClient:
     settings = get_settings()
+    from frontdesk_agent.tracing import TracedLLMClient
+
+    if settings.llm_provider == "fake":
+        from frontdesk_agent.llm.fake import CannedLLMClient
+
+        return TracedLLMClient(CannedLLMClient(latency_s=settings.llm_fake_latency_s))
     if not settings.anthropic_api_key:
         raise LLMConfigurationError(
             "FDA_ANTHROPIC_API_KEY is not set. Copy .env.example to .env and add your key."
         )
 
     from frontdesk_agent.llm.anthropic_client import AnthropicLLMClient
-    from frontdesk_agent.tracing import TracedLLMClient
 
     # Every model call made through the app is a span (tracing.py).
     return TracedLLMClient(

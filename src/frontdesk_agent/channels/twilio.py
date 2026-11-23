@@ -7,6 +7,7 @@ cases around ports and query strings that the library already handles.
 
 import asyncio
 import logging
+import uuid
 
 logger = logging.getLogger(__name__)
 
@@ -41,4 +42,5 @@ class ConsoleSender:
     async def send(self, *, to: str, from_: str, body: str) -> str:
         print(f"\n[SMS {from_} -> {to}]\n{body}\n", flush=True)
         logger.info("console sms", extra={"chars": len(body)})
-        return "console"
+        # Unique, like a Twilio SID: sms_messages has a unique index on it.
+        return f"console-{uuid.uuid4().hex}"

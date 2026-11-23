@@ -87,3 +87,31 @@ async def test_flush_without_commit_refuses_to_drop_texts(desk: Desk, world: Wor
     async with desk.services.sessionmaker() as s:
         with pytest.raises(RuntimeError, match="before Effects.commit"):
             await effects.flush(s, desk.sender, desk.queue)
+
+
+class SameIdSender:
+    """Returns one provider id for every text, as ConsoleSender once did."""
+
+    def __init__(self) -> None:
+        self.sent: list[str] = []
+
+    async def send(self, *, to: str, from_: str, body: str) -> str:
+        self.sent.append(body)
+        return "SMsame"
+
+
+async def test_a_sent_text_whose_record_will_not_save_is_never_sent_again(
+    desk: Desk, world: World
+) -> None:
+    """Found by the load test: the second text's provider id broke a unique
+    index, its row stayed queued, and the sweeper re-sent it every minute."""
+    sender = SameIdSender()
+    desk.services.sender = sender
+    desk.llm.script(say("First."), say("Second."))
+    await text(desk, world, "one")
+    await text(desk, world, "two")
+
+    rows = await outbound(desk)
+    assert sorted(r.status for r in rows) == [MessageStatus.SENT, MessageStatus.SENT]
+    assert await sweep(desk.services.sessionmaker, sender, older_than_s=0) == 0
+    assert sender.sent == ["First.", "Second."]

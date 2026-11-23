@@ -125,3 +125,32 @@ async def test_with_redis_down_the_job_runs_in_process(desk: Desk, world: World)
 async def test_without_a_fallback_redis_down_still_raises() -> None:
     with pytest.raises((RedisError, OSError)):  # refused, or a timeout on Windows
         await ArqQueue(DEAD_REDIS).enqueue("handle_inbound", tenant_id="x", message_id="y")
+
+
+async def test_a_hanging_redis_costs_one_capped_wait_then_is_skipped(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The load test saw single enqueues hang 6-42 s with Redis killed; the
+    webhook has 15 s. One attempt is capped, and later ones skip Redis."""
+    tries: list[str] = []
+
+    async def hang(self: ArqQueue, job: str, defer: float, kwargs: dict[str, Any]) -> None:
+        tries.append(job)
+        await asyncio.sleep(60)
+
+    ran: list[str] = []
+
+    class Recording(InlineQueue):
+        async def enqueue(self, job: str, *, defer_seconds: float = 0, **kwargs: Any) -> None:
+            ran.append(job)
+
+    monkeypatch.setattr(ArqQueue, "_enqueue_on_redis", hang)
+    queue = ArqQueue(DEAD_REDIS, fallback=Recording())
+    queue.attempt_timeout_s = 0.2
+    loop = asyncio.get_running_loop()
+    start = loop.time()
+    await queue.enqueue("handle_inbound", tenant_id="t", message_id="1")
+    await queue.enqueue("handle_inbound", tenant_id="t", message_id="2")
+    assert loop.time() - start < 1.0
+    assert tries == ["handle_inbound"]  # the second call did not wait on Redis
+    assert ran == ["handle_inbound", "handle_inbound"]  # and nothing was dropped

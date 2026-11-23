@@ -43,7 +43,19 @@ async def deliver(
     except Exception:  # a failed send must not lose the others or the record
         logger.warning("sms send failed", extra={"message_id": str(message_id)}, exc_info=True)
         msg.status = MessageStatus.FAILED
-    await session.commit()
+    status = msg.status
+    try:
+        await session.commit()
+    except Exception:
+        # The send is done, but its row would not save (in the Module 7 load
+        # test: a provider id that broke a unique index). Never leave it
+        # queued: the sweeper would send it again every minute, forever.
+        logger.exception("sms result not saved", extra={"message_id": str(message_id)})
+        await session.rollback()
+        again = await SmsMessageRepository(session, tenant_id).lock_queued(message_id)
+        if again is not None:
+            again.status = status  # the provider id is lost; the text is not resent
+            await session.commit()
     return True
 
 

@@ -140,33 +140,57 @@ class ArqQueue:
     DependencyDown alert say that it is happening.
     """
 
+    # The webhook has 15 s before Twilio gives up. In the Module 7 load test a
+    # killed Redis made single enqueues hang for 6-42 s (name lookups, a Redis
+    # still loading), so cap each attempt, and after a failure skip Redis for
+    # a while instead of making every request wait to fail.
+    attempt_timeout_s = 2.0
+    retry_after_s = 10.0
+
     def __init__(self, redis_url: str, fallback: "InlineQueue | None" = None) -> None:
         self._redis_url = redis_url
         self._pool: Any = None
         self.fallback = fallback
+        self._skip_until = 0.0  # monotonic time; Redis is not tried before it
 
     async def enqueue(self, job: str, *, defer_seconds: float = 0, **kwargs: Any) -> None:
-        from arq import create_pool
-        from arq.connections import RedisSettings
         from redis.exceptions import RedisError
 
+        if self.fallback is not None and time.monotonic() < self._skip_until:
+            await self._fall_back(job, "skipped", defer_seconds, kwargs)
+            return
         try:
-            if self._pool is None:
-                # Fail fast: the caller is a webhook with a 15 s budget.
-                settings = RedisSettings.from_dsn(self._redis_url)
-                settings.conn_retries = 0
-                self._pool = await create_pool(settings)
-            await self._pool.enqueue_job(job, _defer_by=defer_seconds or None, **kwargs)
-        except (RedisError, OSError) as exc:
+            await asyncio.wait_for(
+                self._enqueue_on_redis(job, defer_seconds, kwargs), self.attempt_timeout_s
+            )
+        except (RedisError, OSError) as exc:  # TimeoutError is an OSError
             if self.fallback is None:
                 raise
-            self._pool = None  # reconnect on the next call
-            QUEUE_FALLBACK.labels(job).inc()
-            logger.warning(
-                "redis unreachable; running job in process",
-                extra={"job": job, "error": type(exc).__name__},
-            )
-            await self.fallback.enqueue(job, defer_seconds=defer_seconds, **kwargs)
+            self._pool = None  # reconnect when Redis is tried again
+            self._skip_until = time.monotonic() + self.retry_after_s
+            await self._fall_back(job, type(exc).__name__, defer_seconds, kwargs)
+
+    async def _enqueue_on_redis(
+        self, job: str, defer_seconds: float, kwargs: dict[str, Any]
+    ) -> None:
+        from arq import create_pool
+        from arq.connections import RedisSettings
+
+        if self._pool is None:
+            settings = RedisSettings.from_dsn(self._redis_url)
+            settings.conn_retries = 0
+            self._pool = await create_pool(settings)
+        await self._pool.enqueue_job(job, _defer_by=defer_seconds or None, **kwargs)
+
+    async def _fall_back(
+        self, job: str, reason: str, defer_seconds: float, kwargs: dict[str, Any]
+    ) -> None:
+        assert self.fallback is not None
+        QUEUE_FALLBACK.labels(job).inc()
+        logger.warning(
+            "redis unavailable; running job in process", extra={"job": job, "reason": reason}
+        )
+        await self.fallback.enqueue(job, defer_seconds=defer_seconds, **kwargs)
 
     async def close(self) -> None:
         if self._pool is not None:

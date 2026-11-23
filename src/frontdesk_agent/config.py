@@ -8,7 +8,7 @@ from decimal import Decimal
 from functools import lru_cache
 from typing import Literal
 
-from pydantic import SecretStr
+from pydantic import SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -36,6 +36,11 @@ class Settings(BaseSettings):
     # action stays on llm_model (ADR 0019). Empty: llm_model does everything.
     llm_lookup_model: str = "claude-haiku-5-5"
     llm_timeout_s: float = 20.0
+    # "fake" answers every agent turn with one lookup and a canned reply after
+    # a realistic delay, at no cost: for load tests (loadtest/). Refused in
+    # production, where it would answer clients with nonsense.
+    llm_provider: Literal["anthropic", "fake"] = "anthropic"
+    llm_fake_latency_s: float = 0.9
     # The agent prompt version (prompts/agent/<version>.md). Changing it, like
     # changing llm_model, runs the eval suite in CI (Module 5).
     agent_prompt_version: str = "v3"
@@ -93,6 +98,12 @@ class Settings(BaseSettings):
     # the API process (local development without Redis).
     job_queue: Literal["redis", "inline"] = "inline"
     redis_url: str = "redis://localhost:6379/0"
+
+    @model_validator(mode="after")
+    def _no_fake_model_in_production(self) -> "Settings":
+        if self.env == "production" and self.llm_provider == "fake":
+            raise ValueError("FDA_LLM_PROVIDER=fake is for load tests, never production")
+        return self
 
 
 @lru_cache
