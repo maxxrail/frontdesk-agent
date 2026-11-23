@@ -42,6 +42,9 @@ permissions:
 jobs:
   evals:
     name: Eval suite (real model)
+    # Dependabot PRs get no repository secrets, so the run could only fail on
+    # the missing API key. A skipped job still satisfies a required check.
+    if: github.event.pull_request.user.login != 'dependabot[bot]'
     runs-on: ubuntu-latest
     timeout-minutes: 45
     services:
