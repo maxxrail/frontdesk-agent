@@ -80,7 +80,7 @@ async def main(clinic: str, phone: str) -> None:
                     reply=text or None,
                     reviewer="console",
                 )
-                await session.commit()
+                await effects.commit(session)
                 await effects.flush(session, services.sender, services.queue)
             await asyncio.sleep(0.1)
             continue

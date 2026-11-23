@@ -131,7 +131,7 @@ async def test_late_cancellation_waits_for_approval(
         await desk.services.frontdesk.decide(
             s, world.tenant_id, item.id, effects, approve=True, reply=None, reviewer="sam"
         )
-        await s.commit()
+        await effects.commit(s)
         await effects.flush(s, desk.sender, desk.queue)
     assert desk.sender.bodies() == [
         "Your 2:00 PM appointment today is cancelled. Note the $50 late fee."
@@ -222,7 +222,7 @@ async def test_reject_runs_nothing_and_sends_only_the_reviewers_text(
             reply="Please call us at the front desk about deposits.",
             reviewer="sam",
         )
-        await s.commit()
+        await effects.commit(s)
         await effects.flush(s, desk.sender, desk.queue)
     assert desk.sender.bodies() == ["Please call us at the front desk about deposits."]
     convo = await scalar(desk, select(Conversation))

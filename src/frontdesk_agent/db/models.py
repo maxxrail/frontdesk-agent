@@ -265,6 +265,9 @@ class MessageStatus(enum.StrEnum):
     HANDLED = "handled"
     SENT = "sent"
     FAILED = "failed"
+    # Outbound, committed with the change it reports, not yet sent: the outbox
+    # (ADR 0020). Sent right after commit, or by the sweeper after a crash.
+    QUEUED = "queued"
 
 
 class SmsMessage(Base, TenantScoped):
@@ -281,6 +284,8 @@ class SmsMessage(Base, TenantScoped):
             postgresql_where="provider_sid IS NOT NULL",
         ),
         Index("ix_sms_messages_conversation_created", "conversation_id", "created_at"),
+        # The outbox sweeper's scan (ADR 0020).
+        Index("ix_sms_messages_queued", "created_at", postgresql_where="status = 'queued'"),
     )
 
     conversation_id: Mapped[uuid.UUID] = mapped_column(

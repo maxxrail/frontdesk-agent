@@ -1,4 +1,5 @@
-"""The background worker: inbound SMS turns, slot filling, offer expiry.
+"""The background worker: inbound SMS turns, slot filling, offer expiry, and
+once a minute the outbox sweep (texts a crash left unsent, ADR 0020).
 
     uv run arq frontdesk_agent.worker.WorkerSettings
 
@@ -9,6 +10,7 @@ jobs inline. Jobs are retried by arq on failure; every job is idempotent
 
 from typing import Any, ClassVar
 
+from arq import cron
 from arq.connections import RedisSettings
 from prometheus_client import start_http_server
 
@@ -16,6 +18,7 @@ from frontdesk_agent.config import get_settings
 from frontdesk_agent.db.session import make_engine, make_sessionmaker
 from frontdesk_agent.dependencies import get_llm_client, get_lookup_llm_client
 from frontdesk_agent.errortracking import init_sentry
+from frontdesk_agent.frontdesk.outbox import sweep
 from frontdesk_agent.logsetup import configure_logging
 from frontdesk_agent.services import Services, build_services, run_job
 from frontdesk_agent.tracing import init_tracing
@@ -54,6 +57,11 @@ def _job(name: str) -> Any:
     return job
 
 
+async def sweep_outbox(ctx: dict[str, Any]) -> int:
+    services: Services = ctx["services"]
+    return await sweep(services.sessionmaker, services.sender)
+
+
 handle_inbound = _job("handle_inbound")
 start_slot_fill = _job("start_slot_fill")
 expire_offer = _job("expire_offer")
@@ -61,6 +69,8 @@ expire_offer = _job("expire_offer")
 
 class WorkerSettings:
     functions: ClassVar[list[Any]] = [handle_inbound, start_slot_fill, expire_offer]
+    # Every minute, and at startup: a restart is when stranded texts exist.
+    cron_jobs: ClassVar[list[Any]] = [cron(sweep_outbox, second=0, run_at_startup=True)]
     on_startup = startup
     on_shutdown = shutdown
     redis_settings = RedisSettings.from_dsn(get_settings().redis_url)

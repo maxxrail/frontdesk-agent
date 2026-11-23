@@ -95,7 +95,7 @@ async def _run_job(services: Services, job: str, **kwargs: Any) -> str:
             outcome = "checked"
         else:
             raise ValueError(f"unknown job: {job}")
-        await session.commit()
+        await effects.commit(session)
         await effects.flush(session, services.sender, services.queue)
     return outcome
 

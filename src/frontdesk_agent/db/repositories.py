@@ -95,6 +95,10 @@ class TenantDirectory:
             raise NotFoundError("tenant not found")
         return tenant
 
+    async def ids(self) -> list[uuid.UUID]:
+        """Every tenant id: for sweeps that then use tenant-bound repositories."""
+        return list((await self._session.execute(select(Tenant.id))).scalars())
+
     async def by_slug(self, slug: str) -> Tenant | None:
         result = await self._session.execute(select(Tenant).where(Tenant.slug == slug))
         return result.scalar_one_or_none()
@@ -433,6 +437,33 @@ class SmsMessageRepository(TenantRepository[SmsMessage]):
         )
         new_id = (await self._session.execute(stmt)).scalar()
         return None if new_id is None else await self.get(new_id)
+
+    async def lock_queued(self, message_id: uuid.UUID) -> SmsMessage | None:
+        """The outbox row, locked, if it is still queued; None if another
+        sender holds it or has sent it. Locked rows are skipped, not waited
+        for, so the post-commit send and the sweeper never send one twice."""
+        stmt = (
+            self._scoped()
+            .where(SmsMessage.id == message_id, SmsMessage.status == MessageStatus.QUEUED)
+            .with_for_update(skip_locked=True)
+        )
+        return (await self._session.execute(stmt)).scalar_one_or_none()
+
+    async def queued_before(self, seconds: float, *, limit: int = 100) -> list[uuid.UUID]:
+        """Outbox rows older than ``seconds`` of database time: left behind by
+        a process that died between commit and send."""
+        since = func.now() - func.make_interval(0, 0, 0, 0, 0, 0, seconds)
+        stmt = (
+            select(SmsMessage.id)
+            .where(
+                SmsMessage.tenant_id == self._tenant_id,
+                SmsMessage.status == MessageStatus.QUEUED,
+                SmsMessage.created_at < since,
+            )
+            .order_by(SmsMessage.created_at)
+            .limit(limit)
+        )
+        return list((await self._session.execute(stmt)).scalars())
 
     async def inbound_count_since(self, conversation_id: uuid.UUID, seconds: float) -> int:
         """Inbound texts in the last ``seconds`` of database time, counting only
