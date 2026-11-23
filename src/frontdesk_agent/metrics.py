@@ -38,6 +38,9 @@ SMS_TURN_SECONDS = Histogram(
     buckets=_TURN_BUCKETS,
 )
 JOBS_FAILED = Counter("frontdesk_jobs_failed_total", "Jobs that raised.", ["job"])
+QUEUE_FALLBACK = Counter(
+    "frontdesk_queue_fallback_total", "Jobs run in the API process because Redis was down.", ["job"]
+)
 LLM_CALLS = Counter("frontdesk_llm_calls_total", "Model calls.", ["model", "prompt", "outcome"])
 LLM_SECONDS = Histogram(
     "frontdesk_llm_call_seconds", "Model call latency.", ["model"], buckets=_FAST_BUCKETS

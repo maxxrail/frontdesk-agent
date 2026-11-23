@@ -4,6 +4,7 @@ Skipped locally when Redis is not running; CI provides Redis, and there a
 missing Redis fails the build instead of skipping.
 """
 
+import asyncio
 import os
 import sys
 import uuid
@@ -13,13 +14,15 @@ from typing import Any
 import pytest
 from arq.connections import RedisSettings, create_pool
 from arq.worker import Worker
+from prometheus_client import REGISTRY
+from redis.exceptions import RedisError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from frontdesk_agent import worker as worker_module
 from frontdesk_agent.db.repositories import TenantDirectory
 from frontdesk_agent.frontdesk.service import accept_inbound
 from frontdesk_agent.llm.fake import say
-from frontdesk_agent.services import ArqQueue
+from frontdesk_agent.services import ArqQueue, InlineQueue
 from tests.desk import CLIENT_PHONE, CLINIC_NUMBER, Desk, World, make_desk, make_world
 
 REDIS_URL = os.environ.get("FDA_TEST_REDIS_URL", "redis://localhost:6379/15")
@@ -89,3 +92,36 @@ async def test_inbound_turn_runs_on_the_worker(redis_ok: None, desk: Desk, world
 
     assert (w.jobs_complete, w.jobs_failed) == (1, 0)
     assert desk.sender.bodies(CLIENT_PHONE) == ["We open at 8 a.m. on weekdays."]
+
+
+# Nothing listens here: a stand-in for Redis having been killed.
+DEAD_REDIS = "redis://127.0.0.1:1/0"
+
+
+async def test_with_redis_down_the_job_runs_in_process(desk: Desk, world: World) -> None:
+    """Degrade, don't drop: the webhook already stored the message, and a
+    Twilio retry would be a duplicate that queues nothing."""
+    async with desk.services.sessionmaker() as s:
+        tenant = await TenantDirectory(s).get(world.tenant_id)
+        msg = await accept_inbound(
+            s, tenant, from_=CLIENT_PHONE, to=CLINIC_NUMBER, body="hi", sid=f"SM{uuid.uuid4().hex}"
+        )
+        await s.commit()
+    assert msg is not None
+    desk.llm.script(say("Hi Dana, how can I help?"))
+    inline = InlineQueue()
+    inline.services = desk.services
+    before = REGISTRY.get_sample_value("frontdesk_queue_fallback_total", {"job": "handle_inbound"})
+
+    queue = ArqQueue(DEAD_REDIS, fallback=inline)
+    await queue.enqueue("handle_inbound", tenant_id=str(world.tenant_id), message_id=str(msg.id))
+    await asyncio.gather(*inline._tasks)
+
+    assert desk.sender.bodies(CLIENT_PHONE) == ["Hi Dana, how can I help?"]
+    after = REGISTRY.get_sample_value("frontdesk_queue_fallback_total", {"job": "handle_inbound"})
+    assert (after or 0) - (before or 0) == 1
+
+
+async def test_without_a_fallback_redis_down_still_raises() -> None:
+    with pytest.raises((RedisError, OSError)):  # refused, or a timeout on Windows
+        await ArqQueue(DEAD_REDIS).enqueue("handle_inbound", tenant_id="x", message_id="y")

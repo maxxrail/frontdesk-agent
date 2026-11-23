@@ -24,7 +24,13 @@ from frontdesk_agent.frontdesk.service import FrontDesk, RateLimits
 from frontdesk_agent.frontdesk.slotfill import SlotFiller
 from frontdesk_agent.llm.base import LLMClient
 from frontdesk_agent.logcontext import bind, bound, new_request_id
-from frontdesk_agent.metrics import JOBS_FAILED, SMS_TURN_SECONDS, SMS_TURNS, sms_outcome
+from frontdesk_agent.metrics import (
+    JOBS_FAILED,
+    QUEUE_FALLBACK,
+    SMS_TURN_SECONDS,
+    SMS_TURNS,
+    sms_outcome,
+)
 from frontdesk_agent.retrieval.embeddings import Embedder, default_embedder
 from frontdesk_agent.tracing import job_span, trace_id_hex
 
@@ -124,19 +130,43 @@ class InlineQueue:
 
 
 class ArqQueue:
-    """Enqueues onto Redis for the arq worker (frontdesk_agent.worker)."""
+    """Enqueues onto Redis for the arq worker (frontdesk_agent.worker).
 
-    def __init__(self, redis_url: str) -> None:
+    With Redis unreachable, a job runs in this process instead (``fallback``)
+    rather than failing the request. Failing would be worse than slow: the
+    webhook has already stored the message, so Twilio's retry is a duplicate
+    and would never queue it, leaving the client unanswered. Deferred jobs run
+    this way are lost on restart; ``frontdesk_queue_fallback_total`` and the
+    DependencyDown alert say that it is happening.
+    """
+
+    def __init__(self, redis_url: str, fallback: "InlineQueue | None" = None) -> None:
         self._redis_url = redis_url
         self._pool: Any = None
+        self.fallback = fallback
 
     async def enqueue(self, job: str, *, defer_seconds: float = 0, **kwargs: Any) -> None:
         from arq import create_pool
         from arq.connections import RedisSettings
+        from redis.exceptions import RedisError
 
-        if self._pool is None:
-            self._pool = await create_pool(RedisSettings.from_dsn(self._redis_url))
-        await self._pool.enqueue_job(job, _defer_by=defer_seconds or None, **kwargs)
+        try:
+            if self._pool is None:
+                # Fail fast: the caller is a webhook with a 15 s budget.
+                settings = RedisSettings.from_dsn(self._redis_url)
+                settings.conn_retries = 0
+                self._pool = await create_pool(settings)
+            await self._pool.enqueue_job(job, _defer_by=defer_seconds or None, **kwargs)
+        except (RedisError, OSError) as exc:
+            if self.fallback is None:
+                raise
+            self._pool = None  # reconnect on the next call
+            QUEUE_FALLBACK.labels(job).inc()
+            logger.warning(
+                "redis unreachable; running job in process",
+                extra={"job": job, "error": type(exc).__name__},
+            )
+            await self.fallback.enqueue(job, defer_seconds=defer_seconds, **kwargs)
 
     async def close(self) -> None:
         if self._pool is not None:
@@ -158,8 +188,9 @@ def build_services(
         if settings.sms_sender == "twilio"
         else ConsoleSender()
     )
+    inline = InlineQueue()
     queue: JobQueue = (
-        ArqQueue(settings.redis_url) if settings.job_queue == "redis" else InlineQueue()
+        ArqQueue(settings.redis_url, fallback=inline) if settings.job_queue == "redis" else inline
     )
     frontdesk = FrontDesk(
         llm=llm,
@@ -177,6 +208,5 @@ def build_services(
         ),
     )
     services = Services(sessionmaker, frontdesk, sender, queue)
-    if isinstance(queue, InlineQueue):
-        queue.services = services
+    inline.services = services  # the queue itself, or ArqQueue's fallback
     return services
