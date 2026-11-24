@@ -78,11 +78,14 @@ def system_prompt(ctx: ToolContext, prompt_version: str = PROMPT_VERSION) -> tup
 # message is already with staff and that tool is not offered. Without this
 # note Haiku 5.5 called the missing tool in 14 of 132 eval cases and drafted
 # "I wasn't able to pass your message to the team" (ADR 0015).
+# The length line is from issue #24: three medical-hold drafts ran over one
+# text, which costs the reviewer an edit before they can approve.
 READ_ONLY_NOTE = (
     "\n\nThis message has already been passed to the clinic team, and nothing you"
     " write is sent until a staff member approves it. escalate_to_human is not"
     " available and not needed. You may look things up. Write the short reply a"
-    " staff member could send; do not say you could not reach the team."
+    " staff member could send; do not say you could not reach the team. It must"
+    " fit in one text: under 320 characters, two or three sentences."
 )
 
 
