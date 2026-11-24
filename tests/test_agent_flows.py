@@ -193,6 +193,23 @@ async def test_money_question_is_held_silently(desk: Desk, world: World) -> None
     assert desk.sender.sent == []
 
 
+async def test_a_parent_booking_for_a_child_goes_to_staff_unbooked(
+    desk: Desk, world: World
+) -> None:
+    """Issue #22: the model escalated this only some of the time, so a rule does."""
+    desk.llm.script(say("Thanks! Our team will text you to set up your son's checkup."))
+    assert await text(desk, world, "I need to book my 7 year old son for a checkup tomorrow") == (
+        "held_for_review:escalation"
+    )
+    assert desk.sender.sent == []  # no medical safety text: this is not medical
+    item = await scalar(desk, select(ReviewItem))
+    assert isinstance(item, ReviewItem) and item.kind == ReviewKind.ESCALATION
+    assert "child" in item.reason and item.proposed_reply.startswith("Thanks!")
+    # The draft could look up times but not book anything.
+    assert "book_appointment" not in desk.llm.conversations[0]["tools"]  # type: ignore[operator]
+    assert await scalar(desk, select(func.count()).select_from(Appointment)) == 0
+
+
 async def test_agent_can_escalate_on_its_own(desk: Desk, world: World) -> None:
     desk.llm.script(
         [call("escalate_to_human", reason="complaint", summary="Unhappy with last visit")],

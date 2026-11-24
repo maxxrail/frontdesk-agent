@@ -20,7 +20,7 @@ HELD_OUT = load_risk_cases(GOLDEN / "risk_holdout.jsonl")
 @pytest.mark.parametrize("cases", [TUNING, HELD_OUT], ids=["tuning", "held-out"])
 def test_set_shape(cases: list[RiskCase]) -> None:
     assert len({c.id for c in cases}) == len(cases)
-    assert {c.label for c in cases} == {"medical", "money", "none"}
+    assert {c.label for c in cases} == {"medical", "money", "child", "none"}
 
 
 def test_sets_do_not_overlap() -> None:
@@ -32,6 +32,7 @@ def test_held_out_rates_do_not_regress() -> None:
     r = measure(HELD_OUT)
     assert r.miss_rate("medical") <= 0.20, r.as_dict()
     assert r.miss_rate("money") <= 0.47, r.as_dict()
+    assert r.miss_rate("child") <= 0.20, r.as_dict()
     assert r.false_positive_rate <= 0.08, r.as_dict()
 
 
@@ -39,4 +40,5 @@ def test_tuning_rates_do_not_regress() -> None:
     r = measure(TUNING)
     assert r.miss_rate("medical") <= 0.025, r.as_dict()
     assert r.miss_rate("money") == 0, r.as_dict()
+    assert r.miss_rate("child") == 0, r.as_dict()
     assert r.false_positive_rate <= 0.07, r.as_dict()

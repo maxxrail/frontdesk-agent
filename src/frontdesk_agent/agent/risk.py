@@ -7,6 +7,9 @@ model sees it, so a model that misjudges risk cannot skip review:
 - Money: refunds, disputes, balances, fee waivers. Prices are not "money":
   "how much is a cleaning" is a policy question the documents answer.
 - Medical: symptoms, medication, clinical advice.
+- A child's booking: a parent booking, moving or cancelling for their child
+  is held as an escalation, because the tools book only the person texting
+  (ADR 0022).
 
 Two more rules live where the action happens, not here: a cancellation inside
 24 hours is held by the cancel tool, and the model can escalate anything else
@@ -104,8 +107,37 @@ _MEDICAL = [
     r"filling|implant|crown|sedation|massage)",
 ]
 
+# A parent or guardian booking, moving or cancelling for their child (issue
+# #22). Allowed, but staff set it up: the tools book only the person texting.
+# Three prompt versions did not make the model escalate it reliably, so it is
+# a rule (ADR 0022). It needs the child to be the one booked: "cancel, my son
+# is sick" or "can I bring my kids" are the parent's own appointment.
+_AGE = r"\d{1,2}[- ]?(?:year|yr)s?[- ]?olds?|\d{1,2} ?yo"
+_KID = (
+    r"sons?|daughters?|kids?|child|children|boys?|girls?|toddlers?|bab(?:y|ies)|teens?"
+    r"|teenagers?|twins|step(?:son|daughter)s?|grand(?:son|daughter|kid|child)s?|grandchildren"
+)
+_THEIR = rf"\b(?:my|our) (?:(?:little|baby|two|three|both|{_AGE}) )*(?:{_KID}|{_AGE})\b"
+_VISIT = r"appointments?|appts?|cleanings?|check-?ups?|exams?|visits?|sessions?|assessments?"
+_CHILD = [
+    # "book my son", "fit our toddler in", "sign my son up", "change my kids' appointments"
+    rf"\b(?:book|schedule|sign|fit|squeeze|move|reschedule|cancel|change|enrol|enroll|register)"
+    rf"(?: up| in)? {_THEIR}",
+    rf"\bget {_THEIR} (?:booked|in|seen|scheduled)",
+    # "anything friday for my kid", "an appointment for my son"
+    rf"\b(?:book\w*|schedul\w*|{_VISIT}|slots?|opening|anything|room|space|time)\b[^.?!]{{0,40}}"
+    rf"\bfor {_THEIR}",
+    # "my daughter's cleaning", "my kids' appointments", "my baby girl's first"
+    rf"{_THEIR}'s?'? (?:{_VISIT}|booking|first)",
+    # "my 4 year old needs her first dental visit", "can my daughter have the 10am".
+    # Not "can my 10 year old come in alone?": that asks the policy (policy-11).
+    rf"{_THEIR} (?:needs|wants|has to|should have) (?:\w+ ){{0,3}}(?:{_VISIT})",
+    rf"\bcan {_THEIR} (?:have|take|get|book)\b",
+]
+
 _MONEY_RE = re.compile("|".join(_MONEY), re.IGNORECASE)
 _MEDICAL_RE = re.compile("|".join(_MEDICAL), re.IGNORECASE)
+_CHILD_RE = re.compile("|".join(_CHILD), re.IGNORECASE)
 
 
 @dataclass(frozen=True, slots=True)
@@ -115,16 +147,22 @@ class RiskFlag:
 
     @property
     def reason(self) -> str:
-        what = "a medical question" if self.kind is ReviewKind.MEDICAL else "a money matter"
+        what = {
+            ReviewKind.MEDICAL: "a medical question",
+            ReviewKind.MONEY: "a money matter",
+        }.get(self.kind, "a booking for the client's child")
         return f"Client message looks like {what} (matched '{self.matched}')."
 
 
 def classify(text: str) -> RiskFlag | None:
-    """Medical wins over money: it is the one that cannot wait."""
+    """Medical wins over money: it is the one that cannot wait. A child's
+    booking comes last: a sick child is a medical message first."""
     if m := _MEDICAL_RE.search(text):
         return RiskFlag(ReviewKind.MEDICAL, m.group(0))
     if m := _MONEY_RE.search(text):
         return RiskFlag(ReviewKind.MONEY, m.group(0))
+    if m := _CHILD_RE.search(text):
+        return RiskFlag(ReviewKind.ESCALATION, m.group(0))
     return None
 
 
