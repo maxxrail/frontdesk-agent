@@ -17,6 +17,8 @@ Order of checks for every inbound message (ADR 0011):
    instead of a sent reply.
 7. The output guardrail checks the reply last: another client's details,
    card data or clinical advice turn it into a review item, not a text.
+   A reply that promises staff will follow up, when nothing was escalated,
+   is escalated in code: the promise needs a review item behind it.
 
 The risk rules and the model see the message after ``clean_untrusted``
 (guardrails.py); the stored message keeps the raw text for staff.
@@ -67,6 +69,7 @@ from frontdesk_agent.guardrails import (
     check_reply,
     clean_untrusted,
     inbound_too_long,
+    promised_handoff,
 )
 from frontdesk_agent.llm.base import LLMClient
 from frontdesk_agent.llm.messages import Message, TextBlock
@@ -268,6 +271,16 @@ class FrontDesk:
             if finding.kind is ReviewKind.MEDICAL:
                 self._text(effects, tenant, convo, client, MEDICAL_HOLDING_MESSAGE)
             return f"held_for_review:guardrail_{finding.rule}"
+        if promise := promised_handoff(run.reply):
+            # Exactly what escalate_to_human would have done: the reply waits
+            # for staff, who are now told (issue #22).
+            reason = (
+                f"The reply promises staff will follow up ('{promise}') but the agent"
+                " did not call escalate_to_human, so it was escalated here."
+            )
+            self._hold(session, convo, msg, HeldAction(ReviewKind.ESCALATION, reason), run.reply)
+            await _audit_guardrail(session, convo, msg, "unbacked_handoff", reason)
+            return "held_for_review:guardrail_unbacked_handoff"
 
         self._text(effects, tenant, convo, client, run.reply)
         msg.status = MessageStatus.HANDLED

@@ -21,7 +21,9 @@ documents are in the model's context (agent/tools.py, ADR 0017).
 
 Output (``check_reply``): the last thing before a text is sent. A reply is
 held for a person, not sent, if it contains another client's full name or
-phone number, payment card data, or clinical advice.
+phone number, payment card data, or clinical advice. After it,
+``promised_handoff``: a reply that says the team will follow up, when the
+agent escalated nothing, is escalated in code so the promise is kept.
 """
 
 import re
@@ -126,6 +128,41 @@ _DIGIT_RUN = re.compile(r"(?<![\d])\d(?:[ -]?\d){12,18}(?![\d])")
 _PHONE = re.compile(r"(?<![\d+])\+?1?[ .-]?\(?\d{3}\)?[ .-]?\d{3}[ .-]?\d{4}(?![\d])")
 _POSSESSIVE = re.compile(r"'s?$")
 _WORD = re.compile(r"[^\W\d_]+(?:['-][^\W\d_]+)*")
+
+
+# A reply that says staff will follow up is a promise only escalate_to_human
+# keeps: without a review item nobody is told (issue #22). In 528 sent replies
+# from four eval runs these matched 6, all promises the agent did not back
+# with the tool, and nothing else. Left out on purpose: "our staff will
+# review" (said of a late cancellation that is held anyway), "I'll have our
+# team look into it" (said conditionally, "let me know and ..."), and "I can
+# connect you" (an offer, not a promise).
+_PROMISED_HANDOFF = re.compile(
+    "|".join(
+        [
+            r"\b(hand|pass|send|forward|flag)(ing|ed)? (this|that|it|your \w+)( \w+)?"
+            r" (off |on |along |over )?to (our|the|a) (team|staff|front desk|office|clinic)",
+            r"\b(our|the) (team|staff|front desk|office|clinic)( member)? will (text|call|contact"
+            r"|reach out|get back|follow up|be in touch)",
+            r"\b(someone|a (staff|team) member)( from (our|the) \w+)? will (text|call|contact"
+            r"|reach out|get back|follow up|be in touch)",
+            r"\bI'?ll get (our|the|a|someone)( \w+)? (team|staff|someone|member)",
+            r"\b(I'?ll|let me|I will|I need to) (check|confirm) with (our|the) (team|staff"
+            r"|front desk|office|clinic|dentist|physio)",
+        ]
+    ),
+    re.IGNORECASE,
+)
+
+
+def promised_handoff(reply: str) -> str | None:
+    """The phrase in ``reply`` that promises staff will follow up, or None.
+
+    Only meaningful for a reply about to be sent with nothing escalated; a
+    draft already held for review is with staff, so the promise is true.
+    """
+    m = _PROMISED_HANDOFF.search(reply)
+    return m.group(0) if m else None
 
 
 @dataclass(frozen=True, slots=True)

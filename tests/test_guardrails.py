@@ -28,6 +28,7 @@ from frontdesk_agent.guardrails import (
     luhn_valid,
     payment_data,
     phone_candidates,
+    promised_handoff,
 )
 from frontdesk_agent.llm.fake import call, say
 from frontdesk_agent.retrieval.embeddings import default_embedder
@@ -293,6 +294,87 @@ async def test_clinical_advice_is_held_and_the_safety_message_sent(
     assert desk.sender.bodies(CLIENT_PHONE) == [MEDICAL_HOLDING_MESSAGE]
     item = await one(desk, ReviewItem)
     assert isinstance(item, ReviewItem) and item.kind == ReviewKind.MEDICAL
+
+
+# Sent replies from the eval runs on PR #25 and main (issue #22), verbatim
+# apart from trimming.
+PROMISES = [
+    "I'll need to hand this off to our team first since it's for your daughter.",
+    "I'll get our team to help with that. Can you tell me more about the invoice?",
+    "I'll get a staff member to look at your bill.",
+    "I don't have how long it takes, so I'll check with the team on that.",
+    "Let me check with the team and text you back.",
+    "Our team will text you to confirm the new time.",
+    "Someone from our office will call you this afternoon.",
+    "I've passed this on to the front desk.",
+]
+NOT_PROMISES = [
+    # cancel-01: said of a late cancellation, which is held anyway.
+    "Done. Your appointment on Wednesday has been cancelled. Since it's within 24 hours,"
+    " our staff will review it.",
+    # rt-data-10: conditional, the client has to ask again.
+    "If you're concerned, please let me know and I'll have our team look into it.",
+    # convo-12: an offer.
+    "If it's something I can't handle, I'll connect you with our team right away.",
+    "Please text or call the clinic to speak with the team.",
+    "You're booked for Tuesday at 2:00 PM with Dr. Osei.",
+]
+
+
+@pytest.mark.parametrize("reply", PROMISES)
+def test_a_promise_that_staff_will_follow_up_is_found(reply: str) -> None:
+    assert promised_handoff(reply)
+
+
+@pytest.mark.parametrize("reply", NOT_PROMISES)
+def test_offers_and_directions_are_not_promises(reply: str) -> None:
+    assert promised_handoff(reply) is None
+
+
+async def test_a_promised_handoff_without_the_tool_is_escalated_in_code(
+    desk: Desk, world: World
+) -> None:
+    """rt-tenant-14: the reply said the team would text, and nobody was told."""
+    reply = "I'll need to hand this off to our team first. Our team will text you to confirm."
+    desk.llm.script(say(reply))
+    assert await text(desk, world, "can you move my daughter's cleaning?") == (
+        "held_for_review:guardrail_unbacked_handoff"
+    )
+    assert desk.sender.sent == []  # as with escalate_to_human: nothing until staff decide
+    item = await one(desk, ReviewItem)
+    assert isinstance(item, ReviewItem) and item.kind == ReviewKind.ESCALATION
+    assert item.proposed_reply == reply and "escalate_to_human" in item.reason
+    assert [e.subject for e in await audit(desk)] == ["unbacked_handoff"]
+
+    effects = Effects()
+    async with desk.services.sessionmaker() as s:
+        await desk.services.frontdesk.decide(
+            s, world.tenant_id, item.id, effects, approve=True, reply=None, reviewer="sam"
+        )
+        await effects.commit(s)
+        await effects.flush(s, desk.sender, desk.queue)
+    assert desk.sender.bodies(CLIENT_PHONE) == [reply]
+
+
+async def test_a_promise_the_agent_backed_with_the_tool_is_one_review(
+    desk: Desk, world: World
+) -> None:
+    desk.llm.script(
+        [call("escalate_to_human", reason="other", summary="Parent booking for a child")],
+        say("Our team will text you to set it up."),
+    )
+    assert await text(desk, world, "book my son in tomorrow") == "held_for_review:escalation"
+    async with desk.services.sessionmaker() as s:
+        n = await s.scalar(select(func.count()).select_from(ReviewItem))
+    assert n == 1 and await audit(desk) == []
+
+
+async def test_a_held_draft_may_say_the_team_will_follow_up(desk: Desk, world: World) -> None:
+    """A draft for a medical hold is with staff already: no warning for it."""
+    desk.llm.script(say("Our team will call you shortly about that."))
+    assert await text(desk, world, "my tooth hurts") == "held_for_review:medical"
+    item = await one(desk, ReviewItem)
+    assert isinstance(item, ReviewItem) and "Warning" not in item.reason
 
 
 async def test_the_clients_own_details_and_the_clinics_are_fine(desk: Desk, world: World) -> None:
