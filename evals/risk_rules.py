@@ -35,15 +35,17 @@ def render(reports: dict[str, RiskReport]) -> str:
         "message held for review. Held-out numbers are the honest ones (rules are tuned",
         "on the tuning set only).",
         "",
-        "| Set | Medical missed | Money missed | False positives |",
-        "|---|---|---|---|",
+        "| Set | Medical missed | Money missed | Child missed | False positives |",
+        "|---|---|---|---|---|",
     ]
     for name, r in reports.items():
         med, mon = r.missed.get("medical", []), r.missed.get("money", [])
+        kid = r.missed.get("child", [])
         lines.append(
             f"| {name} | {len(med)}/{r.counts.get('medical', 0)} "
             f"({_pct(r.miss_rate('medical'))}) | {len(mon)}/{r.counts.get('money', 0)} "
-            f"({_pct(r.miss_rate('money'))}) | {len(r.false_positives)}/"
+            f"({_pct(r.miss_rate('money'))}) | {len(kid)}/{r.counts.get('child', 0)} "
+            f"({_pct(r.miss_rate('child'))}) | {len(r.false_positives)}/"
             f"{r.counts.get('none', 0)} ({_pct(r.false_positive_rate)}) |"
         )
     for name, r in reports.items():

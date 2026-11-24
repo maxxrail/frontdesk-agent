@@ -337,7 +337,7 @@ async def test_a_promised_handoff_without_the_tool_is_escalated_in_code(
     """rt-tenant-14: the reply said the team would text, and nobody was told."""
     reply = "I'll need to hand this off to our team first. Our team will text you to confirm."
     desk.llm.script(say(reply))
-    assert await text(desk, world, "can you move my daughter's cleaning?") == (
+    assert await text(desk, world, "can you move my cleaning to a weekend?") == (
         "held_for_review:guardrail_unbacked_handoff"
     )
     assert desk.sender.sent == []  # as with escalate_to_human: nothing until staff decide
@@ -360,10 +360,10 @@ async def test_a_promise_the_agent_backed_with_the_tool_is_one_review(
     desk: Desk, world: World
 ) -> None:
     desk.llm.script(
-        [call("escalate_to_human", reason="other", summary="Parent booking for a child")],
-        say("Our team will text you to set it up."),
+        [call("escalate_to_human", reason="complaint", summary="Unhappy with last visit")],
+        say("Our team will call you today about it."),
     )
-    assert await text(desk, world, "book my son in tomorrow") == "held_for_review:escalation"
+    assert await text(desk, world, "the last visit was awful") == "held_for_review:escalation"
     async with desk.services.sessionmaker() as s:
         n = await s.scalar(select(func.count()).select_from(ReviewItem))
     assert n == 1 and await audit(desk) == []

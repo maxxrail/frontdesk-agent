@@ -7,6 +7,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- A keyword risk rule for a parent booking, moving or cancelling for their
+  child: held as an escalation before the model runs, because three prompt
+  versions did not make the model escalate it reliably (ADR 0022, #22).
+  Held-out: 8 of 10 child messages caught, none of 8 lookalikes held;
+  medical and money rates unchanged. 26 new labelled messages in
+  `evals/golden/`, and `evals/risk_rules.py` reports a child column.
 - A reply that promises staff will follow up ("our team will text you",
   "I'll check with the team") when the agent called no `escalate_to_human`
   is escalated in code, exactly as if the tool had been called (ADR 0021,

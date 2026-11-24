@@ -58,3 +58,21 @@
 {"id": "h-n23", "label": "none", "text": "running late, be there in 5"}
 {"id": "h-n24", "label": "none", "text": "what time is my appointment tomorrow"}
 {"id": "h-n25", "label": "none", "text": "do you have evening appointments"}
+{"id": "h-c01", "label": "child", "text": "Need a cleaning for my 9 year old, any time Saturday"}
+{"id": "h-c02", "label": "child", "text": "can I make an appointment for my son? he's 12"}
+{"id": "h-c03", "label": "child", "text": "please reschedule my daughter's checkup to Friday"}
+{"id": "h-c04", "label": "child", "text": "I'd like to cancel Mia's appointment, she's my daughter"}
+{"id": "h-c05", "label": "child", "text": "book both my kids in for cleanings next week"}
+{"id": "h-c06", "label": "child", "text": "is there anything Tuesday afternoon for my little boy"}
+{"id": "h-c07", "label": "child", "text": "My teenager needs a sports physio assessment, can you fit him in?"}
+{"id": "h-c08", "label": "child", "text": "Could you move our son's visit to after school on Thursday"}
+{"id": "h-c09", "label": "child", "text": "Can my 6yo get a checkup the same time as me?"}
+{"id": "h-c10", "label": "child", "text": "I want to sign my stepdaughter up for an exam"}
+{"id": "h-n26", "label": "none", "text": "my daughter will drive me to my appointment, is there parking?", "note": "child as a helper, own booking"}
+{"id": "h-n27", "label": "none", "text": "have to cancel tomorrow, my son is home sick", "note": "own cancellation, child is the reason"}
+{"id": "h-n28", "label": "none", "text": "Do you treat children or only adults?", "note": "question, no booking"}
+{"id": "h-n29", "label": "none", "text": "can my kids wait in the lobby while I'm in?", "note": "own appointment"}
+{"id": "h-n30", "label": "none", "text": "my son said you were great, can I book a cleaning for myself", "note": "referral"}
+{"id": "h-n31", "label": "none", "text": "can we push my appointment later, I need to pick up my daughter at 3", "note": "own reschedule"}
+{"id": "h-n32", "label": "none", "text": "What's the youngest age you see?", "note": "question"}
+{"id": "h-n33", "label": "none", "text": "my boyfriend wants to book too, does he text you himself?", "note": "'boy' inside another word; adult partner"}

@@ -215,6 +215,14 @@ def test_tool_schemas_are_strict() -> None:
         ("is there a fee if I cancel late", None),
         ("do you take sun life insurance", None),
         ("can I book tuesday at 3", None),
+        # A parent booking for a child goes to staff (issue #22, ADR 0022).
+        ("I need to book my 7 year old son for a checkup tomorrow at 2", ReviewKind.ESCALATION),
+        ("can you move my daughter's cleaning to next week?", ReviewKind.ESCALATION),
+        ("have to cancel tomorrow, my son is home sick", None),
+        ("can I bring my kids to my appointment", None),
+        ("my boyfriend wants to book too", None),
+        ("my kid is bleeding after the filling, can we come in", ReviewKind.MEDICAL),
+        ("can I book my son in today, his gum is bleeding", ReviewKind.MEDICAL),  # both: medical
     ],
 )
 def test_risk_rules(message: str, kind: ReviewKind | None) -> None:

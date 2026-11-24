@@ -19,9 +19,13 @@ from typing import Literal
 from frontdesk_agent.agent.risk import RiskFlag, classify
 from frontdesk_agent.db.models import ReviewKind
 
-Label = Literal["medical", "money", "none"]
+Label = Literal["medical", "money", "child", "none"]
 
-_KIND: dict[ReviewKind, Label] = {ReviewKind.MEDICAL: "medical", ReviewKind.MONEY: "money"}
+_KIND: dict[ReviewKind, Label] = {
+    ReviewKind.MEDICAL: "medical",
+    ReviewKind.MONEY: "money",
+    ReviewKind.ESCALATION: "child",  # the only escalation the rules raise
+}
 
 
 @dataclass(frozen=True, slots=True)
@@ -62,6 +66,7 @@ class RiskReport:
             "counts": self.counts,
             "medical_miss_rate": round(self.miss_rate("medical"), 3),
             "money_miss_rate": round(self.miss_rate("money"), 3),
+            "child_miss_rate": round(self.miss_rate("child"), 3),
             "false_positive_rate": round(self.false_positive_rate, 3),
             "missed": {k: [c.id for c in v] for k, v in self.missed.items()},
             "wrong_kind": [c.id for c, _ in self.wrong_kind],
