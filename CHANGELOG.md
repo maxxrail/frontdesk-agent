@@ -5,6 +5,23 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Changed
+
+- Prompt `agent/v4` is the default. A parent booking, moving or cancelling
+  for their child calls `escalate_to_human` before replying; under v3 it
+  sometimes replied without escalating (#22). Two new red-team cases,
+  `rt-tenant-14` (moving a child's booking) and `rt-tenant-15` (cancelling
+  for a partner), bring the suite to 139.
+- Staff drafts written in read-only mode are told to fit one text, under
+  320 characters (#24).
+
+### Fixed
+
+- The medical-advice check (the live guardrail and the eval check) no
+  longer flags a reply that asks the question, such as "let me check
+  whether Advil is okay to take" (#24). Advice in another clause, or after
+  "but" or "so", is still caught.
+
 ## [0.7.0] - 2026-11-23
 
 Module 7: observability, cost and latency.
