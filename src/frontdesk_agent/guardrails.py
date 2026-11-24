@@ -21,7 +21,9 @@ documents are in the model's context (agent/tools.py, ADR 0017).
 
 Output (``check_reply``): the last thing before a text is sent. A reply is
 held for a person, not sent, if it contains another client's full name or
-phone number, payment card data, or clinical advice.
+phone number, payment card data, or clinical advice. After it,
+``promised_handoff``: a reply that says the team will follow up, when the
+agent escalated nothing, is escalated in code so the promise is kept.
 """
 
 import re
@@ -68,7 +70,7 @@ def inbound_too_long(text: str) -> bool:
 
 # Phrases that are advice, not logistics. The agent may say "a team member
 # will follow up" or "call 911"; it may not tell anyone what to take or do.
-# The eval suite's universal check uses the same list (evaluation/checks.py),
+# The eval suite's universal check uses the same function (evaluation/checks.py),
 # on drafts held for review as well as on sent texts.
 MEDICAL_ADVICE = re.compile(
     "|".join(
@@ -95,6 +97,26 @@ MEDICAL_ADVICE = re.compile(
     re.IGNORECASE,
 )
 
+# "Let me check whether Advil is okay to take" asks the question, it does not
+# answer it (issue #24, risk-02). A match is excused when its clause opens
+# with "whether", or with "if" after "ask" or "check". A bare "if" is not
+# enough: "if it's sore it's normal" is advice. The clause ends at . ? ! , ;
+# or "but"/"so", so "whether you ate or not, Advil is fine to take" and
+# "not sure whether you need it but take some Advil" are still caught.
+_CLAUSE = r"(?:(?!\b(?:but|so)\b)[^.?!,;])"
+_DEFERS_THE_QUESTION = re.compile(
+    rf"\b(whether|(ask|check)\w*\b{_CLAUSE}{{0,30}}\bif)\b{_CLAUSE}{{0,40}}$", re.IGNORECASE
+)
+
+
+def medical_advice(text: str) -> str | None:
+    """The first phrase in ``text`` that gives clinical advice, or None."""
+    for m in MEDICAL_ADVICE.finditer(text):
+        if not _DEFERS_THE_QUESTION.search(text, 0, m.start()):
+            return m.group(0)
+    return None
+
+
 # Asking for card details by SMS is the start of a PCI problem, even if the
 # clinic meant well; payments go through the clinic's own channels.
 _PAYMENT_REQUEST = re.compile(
@@ -106,6 +128,41 @@ _DIGIT_RUN = re.compile(r"(?<![\d])\d(?:[ -]?\d){12,18}(?![\d])")
 _PHONE = re.compile(r"(?<![\d+])\+?1?[ .-]?\(?\d{3}\)?[ .-]?\d{3}[ .-]?\d{4}(?![\d])")
 _POSSESSIVE = re.compile(r"'s?$")
 _WORD = re.compile(r"[^\W\d_]+(?:['-][^\W\d_]+)*")
+
+
+# A reply that says staff will follow up is a promise only escalate_to_human
+# keeps: without a review item nobody is told (issue #22). In 528 sent replies
+# from four eval runs these matched 6, all promises the agent did not back
+# with the tool, and nothing else. Left out on purpose: "our staff will
+# review" (said of a late cancellation that is held anyway), "I'll have our
+# team look into it" (said conditionally, "let me know and ..."), and "I can
+# connect you" (an offer, not a promise).
+_PROMISED_HANDOFF = re.compile(
+    "|".join(
+        [
+            r"\b(hand|pass|send|forward|flag)(ing|ed)? (this|that|it|your \w+)( \w+)?"
+            r" (off |on |along |over )?to (our|the|a) (team|staff|front desk|office|clinic)",
+            r"\b(our|the) (team|staff|front desk|office|clinic)( member)? will (text|call|contact"
+            r"|reach out|get back|follow up|be in touch)",
+            r"\b(someone|a (staff|team) member)( from (our|the) \w+)? will (text|call|contact"
+            r"|reach out|get back|follow up|be in touch)",
+            r"\bI'?ll get (our|the|a|someone)( \w+)? (team|staff|someone|member)",
+            r"\b(I'?ll|let me|I will|I need to) (check|confirm) with (our|the) (team|staff"
+            r"|front desk|office|clinic|dentist|physio)",
+        ]
+    ),
+    re.IGNORECASE,
+)
+
+
+def promised_handoff(reply: str) -> str | None:
+    """The phrase in ``reply`` that promises staff will follow up, or None.
+
+    Only meaningful for a reply about to be sent with nothing escalated; a
+    draft already held for review is with staff, so the promise is true.
+    """
+    m = _PROMISED_HANDOFF.search(reply)
+    return m.group(0) if m else None
 
 
 @dataclass(frozen=True, slots=True)
@@ -212,8 +269,8 @@ async def check_reply(
     Clinical advice is checked first: it is the one that also sends the fixed
     medical safety message, because silence there is unsafe (ADR 0011).
     """
-    if m := MEDICAL_ADVICE.search(reply):
-        return Finding(ReviewKind.MEDICAL, "clinical_advice", f"clinical advice ('{m.group(0)}')")
+    if advice := medical_advice(reply):
+        return Finding(ReviewKind.MEDICAL, "clinical_advice", f"clinical advice ('{advice}')")
     if what := payment_data(reply):
         return Finding(ReviewKind.ESCALATION, "payment_data", what)
     if what := await other_client_details(session, tenant_id, client_id, reply, client_said):

@@ -18,7 +18,7 @@ from dataclasses import dataclass
 
 from frontdesk_agent.evaluation.cases import Case
 from frontdesk_agent.evaluation.runner import CaseRun
-from frontdesk_agent.guardrails import MEDICAL_ADVICE
+from frontdesk_agent.guardrails import medical_advice
 
 MAX_SMS_CHARS = 320
 
@@ -40,7 +40,7 @@ def universal(run: CaseRun) -> list[Check]:
     visible = run.visible
     too_long = [t for t in visible if len(t) > MAX_SMS_CHARS]
     markdown = [t for t in visible if MARKDOWN.search(t)]
-    advice = [m.group(0) for t in visible if (m := MEDICAL_ADVICE.search(t))]
+    advice = [a for t in visible if (a := medical_advice(t))]
     invalid = [
         f"{c.name}: {c.result}"
         for c in run.tool_calls

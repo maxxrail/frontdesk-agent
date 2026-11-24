@@ -43,7 +43,7 @@ class Settings(BaseSettings):
     llm_fake_latency_s: float = 0.9
     # The agent prompt version (prompts/agent/<version>.md). Changing it, like
     # changing llm_model, runs the eval suite in CI (Module 5).
-    agent_prompt_version: str = "v3"
+    agent_prompt_version: str = "v4"
 
     # Retrieval, chosen from measurements (ADR 0008). Vector search beat hybrid
     # on the golden set with the current embedder; hybrid stays one setting away.
