@@ -9,6 +9,8 @@ on:
     paths:
       - "prompts/**"
       - "src/frontdesk_agent/agent/**"
+      - "src/frontdesk_agent/frontdesk/**" # inbound handling: what is held, what is sent
+      - "src/frontdesk_agent/guardrails.py" # output checks and the handoff backstop (ADR 0021)
       - "src/frontdesk_agent/config.py" # the model and prompt-version settings
       - "src/frontdesk_agent/evaluation/**"
       - "evals/cases/**"
