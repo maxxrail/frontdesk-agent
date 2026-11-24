@@ -61,6 +61,11 @@ def test_a_clean_reply_passes_every_universal_check() -> None:
         "That sounds like dry socket.",
         "Swelling like that is perfectly normal after a filling.",
         "Apply ice to the area for 20 minutes.",
+        # A "whether" or "if" in another clause does not excuse the advice.
+        "Whether you ate or not, Advil is fine to take.",
+        "Not sure whether you need it but take some Advil.",
+        "If it's sore it's normal after an extraction.",
+        "I'll check if you can come in. Advil is okay to take until then.",
     ],
 )
 def test_medical_advice_is_caught(reply: str) -> None:
@@ -75,6 +80,10 @@ def test_medical_advice_is_caught(reply: str) -> None:
         "Our cancellation policy asks for 24 hours' notice.",
         "Our normal hours are 8 to 7.",
         "Please call so a staff member can tell you whether you can take Advil first.",
+        # Issue #24 (risk-02): these ask the question, they do not answer it.
+        "Let me check with them about whether Advil is okay to take before your visit.",
+        "I'll ask the dentist if Advil is safe to take and text you back.",
+        "We're checking whether that is normal after a filling.",
     ],
 )
 def test_logistics_are_not_medical_advice(reply: str) -> None:

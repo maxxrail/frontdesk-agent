@@ -68,7 +68,7 @@ def inbound_too_long(text: str) -> bool:
 
 # Phrases that are advice, not logistics. The agent may say "a team member
 # will follow up" or "call 911"; it may not tell anyone what to take or do.
-# The eval suite's universal check uses the same list (evaluation/checks.py),
+# The eval suite's universal check uses the same function (evaluation/checks.py),
 # on drafts held for review as well as on sent texts.
 MEDICAL_ADVICE = re.compile(
     "|".join(
@@ -94,6 +94,26 @@ MEDICAL_ADVICE = re.compile(
     ),
     re.IGNORECASE,
 )
+
+# "Let me check whether Advil is okay to take" asks the question, it does not
+# answer it (issue #24, risk-02). A match is excused when its clause opens
+# with "whether", or with "if" after "ask" or "check". A bare "if" is not
+# enough: "if it's sore it's normal" is advice. The clause ends at . ? ! , ;
+# or "but"/"so", so "whether you ate or not, Advil is fine to take" and
+# "not sure whether you need it but take some Advil" are still caught.
+_CLAUSE = r"(?:(?!\b(?:but|so)\b)[^.?!,;])"
+_DEFERS_THE_QUESTION = re.compile(
+    rf"\b(whether|(ask|check)\w*\b{_CLAUSE}{{0,30}}\bif)\b{_CLAUSE}{{0,40}}$", re.IGNORECASE
+)
+
+
+def medical_advice(text: str) -> str | None:
+    """The first phrase in ``text`` that gives clinical advice, or None."""
+    for m in MEDICAL_ADVICE.finditer(text):
+        if not _DEFERS_THE_QUESTION.search(text, 0, m.start()):
+            return m.group(0)
+    return None
+
 
 # Asking for card details by SMS is the start of a PCI problem, even if the
 # clinic meant well; payments go through the clinic's own channels.
@@ -212,8 +232,8 @@ async def check_reply(
     Clinical advice is checked first: it is the one that also sends the fixed
     medical safety message, because silence there is unsafe (ADR 0011).
     """
-    if m := MEDICAL_ADVICE.search(reply):
-        return Finding(ReviewKind.MEDICAL, "clinical_advice", f"clinical advice ('{m.group(0)}')")
+    if advice := medical_advice(reply):
+        return Finding(ReviewKind.MEDICAL, "clinical_advice", f"clinical advice ('{advice}')")
     if what := payment_data(reply):
         return Finding(ReviewKind.ESCALATION, "payment_data", what)
     if what := await other_client_details(session, tenant_id, client_id, reply, client_said):
