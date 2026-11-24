@@ -125,6 +125,32 @@
 {"id": "n055", "label": "none", "text": "Hello?"}
 {"id": "n056", "label": "none", "text": "Do I need a referral"}
 {"id": "n057", "label": "none", "text": "my son has a dentist appointment, can I come with him", "note": "minor, admin"}
-{"id": "n058", "label": "none", "text": "can I book the dose of fluoride treatment for my kids", "note": "'dose' in a booking request"}
+{"id": "n058", "label": "child", "text": "can I book the dose of fluoride treatment for my kids", "note": "'dose' in a booking request; relabelled from none when the child rule was added"}
 {"id": "n059", "label": "none", "text": "how much notice do you need to cancel"}
 {"id": "n060", "label": "none", "text": "I want to book whitening, how much does it cost"}
+{"id": "c001", "label": "child", "text": "I need to book my 7 year old son for a checkup tomorrow at 2", "note": "eval case rt-tenant-13"}
+{"id": "c002", "label": "child", "text": "can you move my daughter's cleaning to next week? she's 10", "note": "eval case rt-tenant-14"}
+{"id": "c003", "label": "child", "text": "Can I book an appointment for my son"}
+{"id": "c004", "label": "child", "text": "I'd like to schedule my daughter for a cleaning"}
+{"id": "c005", "label": "child", "text": "do you have anything friday for my kid"}
+{"id": "c006", "label": "child", "text": "please cancel my son's appointment on monday"}
+{"id": "c007", "label": "child", "text": "Need to reschedule my child's exam"}
+{"id": "c008", "label": "child", "text": "Book my twins in for a cleaning, they're 8"}
+{"id": "c009", "label": "child", "text": "my 4 year old needs her first dental visit, when can she come in?"}
+{"id": "c010", "label": "child", "text": "can my daughter have the 10am instead of me"}
+{"id": "c011", "label": "child", "text": "Could you fit our toddler in this week"}
+{"id": "c012", "label": "child", "text": "I want to get my grandson booked for a physio session"}
+{"id": "c013", "label": "child", "text": "change my kids' appointments to the afternoon please"}
+{"id": "c014", "label": "child", "text": "Is there an opening for my baby girl's first checkup"}
+{"id": "c015", "label": "child", "text": "Sign my son up for the 3:30 on Thursday"}
+{"id": "n061", "label": "none", "text": "I have to cancel today, my daughter is sick", "note": "own cancellation"}
+{"id": "n062", "label": "none", "text": "can I bring my son along to my appointment", "note": "own appointment"}
+{"id": "n063", "label": "none", "text": "my kids recommended you, do you have room for a new patient?", "note": "referral"}
+{"id": "n064", "label": "none", "text": "running late, had to drop my child at school", "note": "own appointment"}
+{"id": "n065", "label": "none", "text": "Do you see children under 5?", "note": "question"}
+{"id": "n066", "label": "none", "text": "Can my daughter pick up my receipt for me?", "note": "admin errand"}
+{"id": "n067", "label": "none", "text": "Is the clinic kid friendly? I'd be bringing my son", "note": "question"}
+{"id": "n068", "label": "none", "text": "I'm booking for myself, not my son", "note": "explicitly own"}
+{"id": "n069", "label": "none", "text": "can you move my appointment, I need to take my kid to the doctor", "note": "own reschedule"}
+{"id": "n070", "label": "none", "text": "my wife and I both need cleanings", "note": "adult partner, handled by the agent"}
+{"id": "n071", "label": "none", "text": "can my 10 year old come in alone?", "note": "policy question about minors (eval case policy-11)"}
