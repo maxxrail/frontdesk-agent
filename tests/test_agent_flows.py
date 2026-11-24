@@ -12,7 +12,7 @@ import pytest
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from frontdesk_agent.agent.loop import MAX_STEPS, READ_ONLY_NOTE
+from frontdesk_agent.agent.loop import MAX_REPLY_CHARS, MAX_STEPS, READ_ONLY_NOTE
 from frontdesk_agent.agent.risk import MEDICAL_HOLDING_MESSAGE
 from frontdesk_agent.db.models import (
     Appointment,
@@ -28,6 +28,7 @@ from frontdesk_agent.db.models import (
 )
 from frontdesk_agent.db.repositories import AppointmentRepository
 from frontdesk_agent.frontdesk.ports import Effects
+from frontdesk_agent.llm.base import LLMError
 from frontdesk_agent.llm.fake import call, loop_turn, say
 from frontdesk_agent.prompts import PromptError
 from tests.desk import CLIENT_PHONE, NOW, Desk, World, local, make_desk, make_world, text
@@ -191,6 +192,51 @@ async def test_money_question_is_held_silently(desk: Desk, world: World) -> None
         "held_for_review:money"
     )
     assert desk.sender.sent == []
+
+
+LONG = ("Our hours are 8 to 7 on weekdays and 9 to 1 on Saturdays. " * 7).strip()  # 405
+SHORT = "We're open 8 to 7 weekdays and 9 to 1 Saturdays."
+
+
+async def test_an_over_long_reply_is_rewritten_once_and_the_short_one_sent(
+    desk: Desk, world: World
+) -> None:
+    assert len(LONG) > MAX_REPLY_CHARS
+    desk.llm.script(say(LONG), say(SHORT))
+    assert await text(desk, world, "what are your hours") == "agent_reply"
+    assert desk.sender.bodies(CLIENT_PHONE) == [SHORT]
+    assert len(desk.llm.conversations) == 2
+    asked = str(desk.llm.conversations[1]["messages"][-1])  # type: ignore[index]
+    assert f"{len(LONG)} characters" in asked
+    # The transcript keeps what was sent, and the rewrite request is not in it.
+    convo = await scalar(desk, select(Conversation))
+    assert isinstance(convo, Conversation)
+    assert SHORT in str(convo.transcript[-1]) and "characters" not in str(convo.transcript)
+    assert await scalar(desk, select(func.count()).select_from(LLMCall)) == 2  # both costed
+
+
+@pytest.mark.parametrize(
+    "rewrite",
+    [
+        say(LONG + " And more."),
+        [call("check_availability", date="2030-01-08")],
+        say(""),
+        LLMError("overloaded"),
+    ],
+    ids=["longer", "tool-call", "empty", "error"],
+)
+async def test_a_rewrite_that_is_not_shorter_text_keeps_the_original(
+    desk: Desk, world: World, rewrite: object
+) -> None:
+    desk.llm.script(say(LONG), rewrite)  # type: ignore[arg-type]
+    assert await text(desk, world, "what are your hours") == "agent_reply"
+    assert desk.sender.bodies(CLIENT_PHONE) == [LONG]
+
+
+async def test_a_reply_that_fits_is_not_rewritten(desk: Desk, world: World) -> None:
+    desk.llm.script(say(SHORT))
+    assert await text(desk, world, "what are your hours") == "agent_reply"
+    assert len(desk.llm.conversations) == 1
 
 
 async def test_a_parent_booking_for_a_child_goes_to_staff_unbooked(

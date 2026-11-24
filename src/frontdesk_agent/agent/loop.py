@@ -18,6 +18,7 @@ recorded and costed like any other call.
 """
 
 import logging
+from collections.abc import Awaitable
 from dataclasses import dataclass, field
 from decimal import Decimal
 from typing import Literal
@@ -45,6 +46,10 @@ logger = logging.getLogger(__name__)
 PROMPT_NAME = "agent"
 PROMPT_VERSION = "v1"  # the default; Settings.agent_prompt_version overrides it
 MAX_STEPS = 6
+# One SMS segment is 160 GSM characters; 320 is two, the most a reply should
+# take. A longer final reply gets one rewrite (``_shorten``), outside the
+# step count.
+MAX_REPLY_CHARS = 320
 
 StopReason = Literal["reply", "step_limit"]
 
@@ -150,12 +155,12 @@ async def _run(
     run = AgentRun(reply=None, stopped="step_limit", steps=0)
     policy = retry_policy or RetryPolicy()
 
-    async def step_with(model: LLMClient) -> AgentTurn:
+    async def step_with(model: LLMClient, extra: Message | None = None) -> AgentTurn:
         async def call() -> AgentTurn:
             return await model.converse(
                 system=system,
                 context=context,
-                messages=messages,
+                messages=[*messages, extra] if extra else messages,
                 tools=specs,
                 prompt_name=PROMPT_NAME,
                 prompt_version=prompt_version,
@@ -190,6 +195,12 @@ async def _run(
         if not turn.tool_calls:
             run.reply = turn.text or None
             run.stopped = "reply"
+            if run.reply and len(run.reply) > MAX_REPLY_CHARS:
+                short = await _shorten(step_with(llm, _shorten_request(run.reply)), run.reply)
+                if short != run.reply:
+                    run.reply = short
+                    # The record shows what was sent, not the draft it replaced.
+                    run.new_messages[-1] = Message("assistant", [TextBlock(short)])
             return run
 
         results: list[Block] = []
@@ -202,6 +213,35 @@ async def _run(
 
     logger.warning("agent hit the step limit", extra={"steps": max_steps})
     return run
+
+
+def _shorten_request(reply: str) -> Message:
+    return Message.user_text(
+        f"(Front desk system, not the client.) That reply is {len(reply)} characters and"
+        f" must fit one text message. Rewrite it in under {MAX_REPLY_CHARS} characters:"
+        " keep every day, date, time, name, price and question, drop the rest. Plain"
+        " sentences, no markdown. Answer with the rewritten text only."
+    )
+
+
+async def _shorten(call: Awaitable[AgentTurn], reply: str) -> str:
+    """One rewrite of an over-long reply (issue #24 and the sms_length check).
+
+    Prompt rules alone left about five over-long texts per eval run, client
+    replies and staff drafts alike. The rewrite is used only if it is shorter
+    and calls no tools; otherwise the original stands, and a long text still
+    goes out as a multi-part SMS. A failed call is logged, never raised: the
+    reply was already good enough to send.
+    """
+    try:
+        turn = await call
+    except Exception:
+        logger.warning("could not shorten an over-long reply", exc_info=True)
+        return reply
+    short = (turn.text or "").strip()
+    if turn.tool_calls or not short or len(short) >= len(reply):
+        return reply
+    return short
 
 
 def _lookup_only(turn: AgentTurn) -> bool:
