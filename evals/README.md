@@ -13,7 +13,8 @@ cost, and stops at a hard spending cap.
 | `history.py` | Scores per run as CSV, for charting across prompt versions | free |
 
 CI (`.github/workflows/evals.yml`) runs `run.py` on pull requests that touch
-the prompts, the agent, the model setting or the evals, posts the score table
+the prompts, the agent, the inbound handling and guardrails, the model setting
+or the evals, posts the score table
 on the PR, and compares it with `baseline.json`.
 
 ## The gate, and how noisy one run is

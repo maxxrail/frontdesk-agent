@@ -7,6 +7,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- A final reply over 320 characters gets one rewrite from the main model,
+  used only if it is shorter and calls no tools. Applies to client replies
+  and staff drafts alike: prompt rules still left about five over-long texts
+  per eval run (#24).
 - A keyword risk rule for a parent booking, moving or cancelling for their
   child: held as an escalation before the model runs, because three prompt
   versions did not make the model escalate it reliably (ADR 0022, #22).
@@ -31,6 +35,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- The eval workflow now also runs on changes to `frontdesk/` (inbound
+  handling) and `guardrails.py`, which decide what reaches a client (#26).
 - The medical-advice check (the live guardrail and the eval check) no
   longer flags a reply that asks the question, such as "let me check
   whether Advil is okay to take" (#24). Advice in another clause, or after
