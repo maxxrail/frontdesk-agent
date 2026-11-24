@@ -5,6 +5,14 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+
+- A reply that promises staff will follow up ("our team will text you",
+  "I'll check with the team") when the agent called no `escalate_to_human`
+  is escalated in code, exactly as if the tool had been called (ADR 0021,
+  #22). It matched 6 of 528 sent replies across four eval runs, all broken
+  promises, and nothing else.
+
 ### Changed
 
 - Prompt `agent/v4` is the default. A parent booking, moving or cancelling
